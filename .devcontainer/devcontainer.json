@@ -1,0 +1,46 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.245.0/containers/python-3
+{
+  "name": "Olira CLI",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "args": {
+      "VARIANT": "3.11-bullseye",
+      "NODE_VERSION": "none"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": true,
+        "python.formatting.ruffPath": "/usr/local/py-utils/bin/ruff",
+        "python.linting.ruffPath": "/usr/local/py-utils/bin/ruff",
+        "python.linting.mypyPath": "/usr/local/py-utils/bin/mypy"
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "eamodio.gitlens",
+        "ms-python.mypy-type-checker"
+      ]
+    }
+  },
+  "postCreateCommand": "bash scripts/install-dev.sh",
+  "remoteUser": "vscode",
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh/,target=/home/vscode/.ssh/,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.aws/,target=/home/vscode/.aws/,type=bind,consistency=cached"
+  ],
+  "containerEnv": {
+    "PYTHONPATH": "${workspaceFolder}",
+    "CODE_ARTIFACT_TOKEN": "${localEnv:CODE_ARTIFACT_TOKEN}"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/aws-cli:1": {}
+  }
+}
