@@ -6,6 +6,17 @@ from typing import Any
 
 from olira_cli.credentials import load_credentials
 
+# Canonical scope definitions — mirrors ApiKeyScope in common-models and api-keys.ts in the console.
+VALID_SCOPES: dict[str, str] = {
+    "mcp:patient-state": "Query patient state via the MCP Patient State server",
+    "mcp:integration": "Olira Integration MCP (coming soon)",
+    "sdk:event-log": "Log health events on behalf of patients via the Olira SDK",
+    "sdk:patient-token": "Mint short-lived, patient-locked JWTs for SDK use",
+    "api:manage-patients": "Create, read, update, and deactivate patient records via REST",
+    "api:org-config": "Read and update organisation platform configuration via REST",
+}
+_DEFAULT_SCOPE = "mcp:patient-state"
+
 
 def _require_creds() -> dict[str, Any] | None:
     creds = load_credentials()
@@ -18,7 +29,7 @@ def _require_creds() -> dict[str, Any] | None:
 def cmd_keys(args: Any) -> int:
     """Dispatch keys create | list | revoke."""
     if args.keys_command == "create":
-        return _keys_create(args.name)
+        return _keys_create(getattr(args, "name", None), scopes=getattr(args, "scopes", None))
     if args.keys_command == "list":
         return _keys_list()
     if args.keys_command == "revoke":
@@ -27,10 +38,78 @@ def cmd_keys(args: Any) -> int:
     return 1
 
 
-def _keys_create(name: str) -> int:
+def _prompt_scopes() -> list[str] | None:
+    """Show an interactive checkbox picker and return the selected scopes.
+
+    Returns None if the user cancels (Ctrl-C / Ctrl-D).
+    """
+    from InquirerPy import inquirer
+    from InquirerPy.base.control import Choice
+
+    choices = [
+        Choice(value=scope, name=f"{scope:<28} {desc}", enabled=(scope == _DEFAULT_SCOPE))
+        for scope, desc in VALID_SCOPES.items()
+    ]
+
+    try:
+        selected: list[str] = inquirer.checkbox(
+            message="Select scopes for this API key (space to toggle, enter to confirm):",
+            choices=choices,
+            instruction="(↑↓ move  space toggle  enter confirm)",
+            validate=lambda result: len(result) > 0,
+            invalid_message="Select at least one scope.",
+            cycle=True,
+        ).execute()
+    except (KeyboardInterrupt, EOFError):
+        print("\nCancelled.", file=sys.stderr)
+        return None
+
+    return selected
+
+
+def _prompt_name() -> str | None:
+    """Prompt the user for a key name. Returns None if cancelled."""
+    from InquirerPy import inquirer
+
+    try:
+        name: str = inquirer.text(
+            message="Key name:",
+            validate=lambda v: len(v.strip()) > 0,
+            invalid_message="Name cannot be empty.",
+        ).execute()
+    except (KeyboardInterrupt, EOFError):
+        print("\nCancelled.", file=sys.stderr)
+        return None
+    return name.strip()
+
+
+def _keys_create(name: str | None = None, scopes: list[str] | None = None) -> int:
     creds = _require_creds()
     if not creds:
         return 1
+
+    if name is None:
+        name = _prompt_name()
+        if name is None:
+            return 1
+
+    if scopes is not None:
+        # Non-interactive: validate the provided scopes client-side before hitting the API.
+        invalid = [s for s in scopes if s not in VALID_SCOPES]
+        if invalid:
+            print(f"Error: Unknown scope(s): {invalid}", file=sys.stderr)
+            print(f"Valid scopes: {', '.join(VALID_SCOPES)}", file=sys.stderr)
+            return 1
+        if not scopes:
+            print("Error: At least one scope must be provided.", file=sys.stderr)
+            return 1
+    else:
+        # Interactive: show the checkbox picker.
+        selected = _prompt_scopes()
+        if selected is None:
+            return 1
+        scopes = selected
+
     import httpx
 
     api_base = creds["api_server"].rstrip("/")
@@ -38,15 +117,20 @@ def _keys_create(name: str) -> int:
     token = creds["access_token"]
     try:
         with httpx.Client(timeout=30.0) as client:
-            r = client.post(url, json={"name": name}, headers={"Authorization": f"Bearer {token}"})
+            r = client.post(
+                url,
+                json={"name": name, "scopes": scopes},
+                headers={"Authorization": f"Bearer {token}"},
+            )
             r.raise_for_status()
             data = r.json()
             raw_key = data.get("raw_key") or data.get("rawKey")
             if not raw_key:
                 print("Error: Server did not return a key.", file=sys.stderr)
                 return 1
-            print(f"API Key created: {raw_key}")
+            print(f"API key created: {raw_key}")
             print("  Copy this key now — it will not be shown again.")
+            print(f"  Scopes: {', '.join(scopes)}")
             return 0
     except httpx.HTTPStatusError as e:
         msg = e.response.json().get("message") or e.response.json().get("detail") or str(e)
@@ -75,14 +159,15 @@ def _keys_list() -> int:
             if not keys:
                 print("No API keys.")
                 return 0
-            print(f"{'NAME':<20} {'CREATED':<12} {'LAST USED':<12} {'STATUS':<10}")
-            print("-" * 56)
+            print(f"{'NAME':<20} {'CREATED':<12} {'LAST USED':<12} {'STATUS':<10} {'SCOPES'}")
+            print("-" * 80)
             for k in keys:
                 name = k.get("name") or k.get("display_name") or ""
                 created = (k.get("created_at") or "")[:10]
                 last_used = (k.get("last_used_at") or "")[:10] if k.get("last_used_at") else "-"
                 status = "active" if k.get("is_active", True) else "revoked"
-                print(f"{name:<20} {created:<12} {last_used:<12} {status:<10}")
+                scopes = ", ".join(k.get("scopes") or [_DEFAULT_SCOPE])
+                print(f"{name:<20} {created:<12} {last_used:<12} {status:<10} {scopes}")
             return 0
     except httpx.HTTPStatusError as e:
         msg = e.response.json().get("message") or e.response.json().get("detail") or str(e)

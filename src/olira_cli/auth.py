@@ -188,7 +188,13 @@ class _QuietHTTPServer(HTTPServer):
     The fragment-bridge page redirects the browser to /done before the write
     fully completes, causing harmless BrokenPipeErrors that would otherwise
     clutter stderr.
+
+    allow_reuse_address ensures SO_REUSEADDR is set before bind() so the port
+    can be reclaimed immediately after a previous run without waiting for
+    TIME_WAIT to expire.
     """
+
+    allow_reuse_address = True
 
     def handle_error(self, request: object, client_address: object) -> None:
         import sys
@@ -199,7 +205,11 @@ class _QuietHTTPServer(HTTPServer):
 
 
 class _ConsoleCallbackServer:
-    def __init__(self, port: int = 9100, timeout: int = 300, console_url: str | None = None):
+    # Default start port chosen to avoid common conflicts:
+    # - 3000-8999 are common web dev server ports
+    _DEFAULT_PORT = 9876
+
+    def __init__(self, port: int = _DEFAULT_PORT, timeout: int = 300, console_url: str | None = None):
         self.timeout = timeout
         self.console_url = console_url
         self._server: _QuietHTTPServer | None = None
@@ -208,6 +218,7 @@ class _ConsoleCallbackServer:
         self.port = self._find_port(port)
 
     def _find_port(self, start: int) -> int:
+        """Find an available port by binding to 127.0.0.1 — same address the server will use."""
         for port in range(start, start + 100):
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -229,8 +240,7 @@ class _ConsoleCallbackServer:
         _ConsoleCallbackHandler.callback_event = event
         _ConsoleCallbackHandler.console_url = console_url
         try:
-            self._server = _QuietHTTPServer(("0.0.0.0", self.port), _ConsoleCallbackHandler)
-            self._server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self._server = _QuietHTTPServer(("127.0.0.1", self.port), _ConsoleCallbackHandler)
             self._server.timeout = 0.5
             if server_ready:
                 server_ready.set()

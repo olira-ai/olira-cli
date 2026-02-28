@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-28
+
+### Added
+
+- **Interactive scope picker for `olira keys create`** — When `--scopes` is not provided, an InquirerPy checkbox prompt is shown listing all six valid scopes. `mcp:patient-state` is pre-selected by default. Use arrow keys to navigate, space to toggle, and enter to confirm. Ctrl-C / Ctrl-D cancels cleanly. At least one scope must be selected before the key is created.
+- **`--scopes` flag for `olira keys create`** — Non-interactive escape hatch for CI and scripting. Accepts one or more space-separated scope values (e.g. `--scopes mcp:patient-state api:manage-patients`). Invalid scope strings are rejected client-side with a clear error before hitting the API.
+- **Scopes column in `olira keys list`** — The list table now includes a `SCOPES` column showing the granted scopes for each key. Keys without a stored scope field (pre-dating scope support) display `mcp:patient-state` as the default.
+
+### Changed
+
+- `olira keys create` now always sends a `scopes` field in the creation request body, replacing the previous behaviour of sending only `{"name": ...}` and relying on the server default.
+
 ## [0.2.0] - 2026-02-24
 
 ### Added

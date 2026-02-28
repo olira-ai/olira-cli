@@ -26,7 +26,7 @@ def main() -> int:
     login_parser.add_argument("--env", default=None, help=_ENV_HELP)
     login_parser.add_argument("--mcp-server", help=_MCP_HELP)
     login_parser.add_argument("--console-url", help=_CONSOLE_HELP)
-    login_parser.add_argument("--port", type=int, default=9100, help=_PORT_HELP)
+    login_parser.add_argument("--port", type=int, default=9876, help=_PORT_HELP)
 
     # token
     token_parser = subparsers.add_parser("token", help="Print access token to stdout for piping")
@@ -42,7 +42,21 @@ def main() -> int:
     keys_parser = subparsers.add_parser("keys", help="Manage API keys (org admin only)")
     keys_sub = keys_parser.add_subparsers(dest="keys_command", help="keys subcommands")
     keys_create = keys_sub.add_parser("create", help="Create a new API key")
-    keys_create.add_argument("--name", required=True, help="Descriptive name for the key")
+    keys_create.add_argument(
+        "--name",
+        default=None,
+        help="Key name (skips the interactive prompt).",
+    )
+    keys_create.add_argument(
+        "--scopes",
+        nargs="+",
+        metavar="SCOPE",
+        help=(
+            "Scopes to grant (space-separated). Skips the interactive picker. "
+            "Valid: mcp:patient-state, mcp:integration, sdk:event-log, "
+            "sdk:patient-token, api:manage-patients, api:org-config."
+        ),
+    )
     keys_sub.add_parser("list", help="List API keys for your organization")
     keys_revoke = keys_sub.add_parser("revoke", help="Permanently revoke an API key")
     keys_revoke.add_argument("key", help="Key name or ID to revoke")

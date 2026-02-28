@@ -6,7 +6,7 @@
 
 set -e
 
-REPO="raia-health/olira-platform"
+REPO="raiahealth/olira-platform"
 BINARY="olira"
 INSTALL_DIR="/usr/local/bin"
 

@@ -11,7 +11,7 @@ This document explains how `olira-cli` is versioned, built, and distributed.
 
 | Channel | Command | Audience |
 |---|---|---|
-| Homebrew | `brew install raia-health/tap/olira` | macOS + Linux (primary) |
+| Homebrew | `brew install raiahealth/tap/olira` | macOS + Linux (primary) |
 | Shell script | `curl -fsSL https://install.olira.ai \| sh` | Any Unix (fallback) |
 | GitHub Releases | Direct binary download | Manual / CI use |
 | AWS CodeArtifact | `pip install olira-cli` | Olira engineers only (private) |
@@ -47,7 +47,7 @@ packages/
     │   ├── api.py          # app-api calls (keys, member profile)
     │   └── credentials.py  # Local credential storage and logout
     ├── homebrew/
-    │   └── olira.rb        # Homebrew formula template (pushed to raia-health/homebrew-tap)
+    │   └── olira.rb        # Homebrew formula template (pushed to raiahealth/homebrew-tap)
     ├── install.sh          # Shell installer (served at https://install.olira.ai)
     ├── pyproject.toml
     ├── uv.lock
@@ -115,7 +115,7 @@ After all binaries are ready:
 3. Extracts the release notes from `CHANGELOG.md` for the current version
 4. Creates (or re-creates) a GitHub Release tagged `olira-cli-v{version}`
 5. Attaches all binaries + `checksums.txt`
-6. Updates the Homebrew formula in the `raia-health/homebrew-tap` repo:
+6. Updates the Homebrew formula in the `raiahealth/homebrew-tap` repo:
    - Bumps `version`
    - Replaces SHA256 placeholders with real checksums
    - Commits and pushes — Homebrew picks it up automatically
@@ -134,15 +134,15 @@ are the external GitHub repo and the secret.
 
 #### 1. Create the tap repository
 
-Create a **public** GitHub repository named exactly `homebrew-tap` under the `raia-health`
+Create a **public** GitHub repository named exactly `homebrew-tap` under the `olira`
 org:
 
 ```
-https://github.com/raia-health/homebrew-tap
+https://github.com/raiahealth/homebrew-tap
 ```
 
-Homebrew derives the tap name from the repo name — `raia-health/homebrew-tap` becomes
-`brew tap raia-health/tap`.
+Homebrew derives the tap name from the repo name — `raiahealth/homebrew-tap` becomes
+`brew tap raiahealth/tap`.
 
 The minimal repo structure required:
 
@@ -157,7 +157,7 @@ homebrew-tap/
 Generate a **fine-grained Personal Access Token** (PAT) under a machine/bot account (or the
 `olira` org account):
 
-- **Repository access**: `raia-health/homebrew-tap` only
+- **Repository access**: `raiahealth/homebrew-tap` only
 - **Permissions**: `Contents → Read and Write`
 
 Add it to _this_ repository (`olira-platform`) under:
@@ -170,10 +170,10 @@ Add it to _this_ repository (`olira-platform`) under:
 #### 3. Do a dry-run after the first binary release
 
 After the first `publish-olira-cli.yml` run that includes the `create-release` job, verify
-the formula was updated in `raia-health/homebrew-tap` and test locally:
+the formula was updated in `raiahealth/homebrew-tap` and test locally:
 
 ```bash
-brew tap raia-health/tap
+brew tap raiahealth/tap
 brew install olira
 olira --version
 ```
@@ -188,7 +188,7 @@ publish-olira-cli.yml
   └─ create-release job
        ├─ creates GitHub Release with binaries
        ├─ computes sha256 checksums
-       └─ pushes updated olira.rb to raia-health/homebrew-tap
+       └─ pushes updated olira.rb to raiahealth/homebrew-tap
                 │
                 ▼
         brew upgrade olira   ← picks up new version automatically
@@ -198,10 +198,10 @@ publish-olira-cli.yml
 
 ```bash
 # One-liner (taps and installs in one step)
-brew install raia-health/tap/olira
+brew install raiahealth/tap/olira
 
 # Or explicitly
-brew tap raia-health/tap
+brew tap raiahealth/tap
 brew install olira
 
 # Upgrade
@@ -240,7 +240,7 @@ architecture, fetches the latest GitHub Release, and installs the binary to `/us
 Point `install.olira.ai` at a redirect to the raw GitHub URL:
 
 ```
-https://raw.githubusercontent.com/raia-health/olira-platform/main/packages/olira-cli/install.sh
+https://raw.githubusercontent.com/raiahealth/olira-platform/main/packages/olira-cli/install.sh
 ```
 
 This always serves the `main` branch version with no caching issues. Fine for an early
@@ -278,7 +278,7 @@ Homebrew formula, and publishes to CodeArtifact.
 
 | Secret | Used by | Purpose |
 |---|---|---|
-| `HOMEBREW_TAP_TOKEN` | `create-release` job | Push formula updates to `raia-health/homebrew-tap` |
+| `HOMEBREW_TAP_TOKEN` | `create-release` job | Push formula updates to `raiahealth/homebrew-tap` |
 
 ---
 
