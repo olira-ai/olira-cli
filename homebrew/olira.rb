@@ -6,14 +6,14 @@ class Olira < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/raiahealth/olira-platform/releases/download/olira-cli-v#{version}/olira-macos-arm64"
+      url "https://github.com/olira-ai/olira-platform/releases/download/olira-cli-v#{version}/olira-macos-arm64"
       sha256 "PLACEHOLDER_ARM64_SHA256"
 
       def install
         bin.install "olira-macos-arm64" => "olira"
       end
     else
-      url "https://github.com/raiahealth/olira-platform/releases/download/olira-cli-v#{version}/olira-macos-x86_64"
+      url "https://github.com/olira-ai/olira-platform/releases/download/olira-cli-v#{version}/olira-macos-x86_64"
       sha256 "PLACEHOLDER_X86_64_SHA256"
 
       def install
@@ -23,7 +23,7 @@ class Olira < Formula
   end
 
   on_linux do
-    url "https://github.com/raiahealth/olira-platform/releases/download/olira-cli-v#{version}/olira-linux-x86_64"
+    url "https://github.com/olira-ai/olira-platform/releases/download/olira-cli-v#{version}/olira-linux-x86_64"
     sha256 "PLACEHOLDER_LINUX_X86_64_SHA256"
 
     def install

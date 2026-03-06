@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "olira-cli"
-version = "0.3.0"
+version = "0.3.1"
 authors = [
   { name = "Olira AI", email = "dev@olira.ai" },
 ]
@@ -40,9 +40,9 @@ dev = [
 olira = "olira_cli.cli:main"
 
 [project.urls]
-"Homepage" = "https://github.com/raiahealth/olira-platform"
-"Bug Reports" = "https://github.com/raiahealth/olira-platform/issues"
-"Source" = "https://github.com/raiahealth/olira-platform"
+"Homepage" = "https://github.com/olira-ai/olira-platform"
+"Bug Reports" = "https://github.com/olira-ai/olira-platform/issues"
+"Source" = "https://github.com/olira-ai/olira-platform"
 
 [tool.setuptools.packages.find]
 where = ["src"]

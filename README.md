@@ -7,7 +7,7 @@ Command-line tool for authenticating with Olira and configuring MCP (Model Conte
 **macOS / Linux — Homebrew (recommended):**
 
 ```bash
-brew install raiahealth/tap/olira
+brew install olira-ai/tap/olira
 ```
 
 **macOS / Linux — Shell script:**
@@ -16,7 +16,7 @@ brew install raiahealth/tap/olira
 curl -fsSL https://install.olira.ai | sh
 ```
 
-**Manual** — download the binary for your platform from [GitHub Releases](https://github.com/raiahealth/olira-platform/releases), make it executable, and move it to your `$PATH`:
+**Manual** — download the binary for your platform from [GitHub Releases](https://github.com/olira-ai/olira-platform/releases), make it executable, and move it to your `$PATH`:
 
 ```bash
 chmod +x olira-macos-arm64
