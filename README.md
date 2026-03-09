@@ -47,6 +47,8 @@ source .venv/bin/activate
    olira login
    ```
 
+   The browser sign-in page supports **Google** (single-step) and **email/password with TOTP MFA**. Use whichever method matches your Olira account.
+
    For internal / non-production environments (dev builds only):
 
    ```bash
@@ -129,7 +131,7 @@ When creating an API key you will be prompted to select one or more scopes:
 
 Credentials are stored in `~/.olira/credentials.json` with permissions `600`. The file contains your access token and identity — keep it secure.
 
-Tokens expire after ~24 hours. Re-run `olira login` to refresh; if you still have an active browser session with the Console it completes in a few seconds.
+Tokens expire after ~24 hours. Re-run `olira login` to refresh; if you still have an active browser session with the Console it completes in a few seconds without requiring you to sign in again.
 
 API keys never expire and are not stored locally — they live in the platform and can be revoked with `olira keys revoke`.
 

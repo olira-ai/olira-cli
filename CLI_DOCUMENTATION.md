@@ -80,6 +80,11 @@ Opens a browser window to authenticate with your Olira account. Starts a local c
 olira login
 ```
 
+The browser sign-in page supports two authentication methods:
+
+- **Google** — click "Continue with Google" to sign in with your Google account. Google sign-in acts as a single step (no separate MFA prompt).
+- **Email + password with MFA (TOTP)** — enter your email and password, then complete a 6-digit TOTP code from your authenticator app (Google Authenticator, Authy, or any TOTP-compatible app). MFA is required for all email/password accounts.
+
 The session token is valid for approximately 24 hours. After it expires, run `olira login` again and then `olira configure cursor` to refresh the MCP token.
 
 > **Prerequisites:** You need an Olira account before using the CLI. Sign up or log in at [console.olira.ai](https://console.olira.ai).

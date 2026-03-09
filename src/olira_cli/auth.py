@@ -42,25 +42,79 @@ SUCCESS_HTML = """<!DOCTYPE html>
 ERROR_HTML = """<!DOCTYPE html>
 <html>
 <head>
-    <title>Authorization Failed</title>
+    <meta charset="utf-8">
+    <title>Sign-in failed</title>
     <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-               display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;
-               background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }}
-        .container {{ text-align: center; background: white; padding: 60px 80px; border-radius: 16px;
-                     box-shadow: 0 20px 60px rgba(0,0,0,0.3); }}
-        .error-icon {{ font-size: 64px; margin-bottom: 20px; }}
-        h1 {{ color: #ef4444; margin: 0 0 10px 0; }}
-        p {{ color: #666; margin: 0; font-size: 18px; }}
-        .error-detail {{ margin-top: 15px; color: #999; font-size: 14px; font-family: monospace; }}
+               display: flex; justify-content: center; align-items: center; min-height: 100vh;
+               background: #1a1a1a; color: #e8e8e6; }}
+        .card {{ background: #242424; border: 1px solid #3e3e3e; border-radius: 16px;
+                 padding: 48px 40px; max-width: 420px; width: 90%; text-align: center; }}
+        .icon {{ width: 44px; height: 44px; border-radius: 50%; background: #3a3000;
+                 display: flex; align-items: center; justify-content: center;
+                 margin: 0 auto 20px; font-size: 20px; }}
+        h1 {{ font-size: 18px; font-weight: 600; margin-bottom: 8px; }}
+        .message {{ font-size: 14px; color: #a0a0a0; line-height: 1.5; margin-bottom: 0; }}
+        .detail {{ margin-top: 16px; font-size: 12px; color: #666; font-family: monospace; }}
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="error-icon">✗</div>
-        <h1>Authorization Failed</h1>
-        <p>{error_message}</p>
-        <p class="error-detail">{error_detail}</p>
+    <div class="card">
+        <div class="icon">⚠</div>
+        <h1>Sign-in failed</h1>
+        <p class="message">{error_message}</p>
+        {error_detail}
+    </div>
+</body>
+</html>"""
+
+NO_ACCOUNT_HTML = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>No account found</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+               display: flex; justify-content: center; align-items: center; min-height: 100vh;
+               background: #1a1a1a; color: #e8e8e6; }
+        .wrap { width: 100%; max-width: 360px; padding: 0 24px; }
+        h2 { font-size: 22px; font-weight: 600; text-align: center; margin-bottom: 8px; }
+        .sub { font-size: 14px; color: #a0a0a0; text-align: center; margin-bottom: 32px; line-height: 1.5; }
+        .action-card { background: #242424; border: 1px solid #3e3e3e; border-radius: 12px;
+                       padding: 20px; margin-bottom: 12px; }
+        .action-card p { font-size: 13px; font-weight: 600; color: #e8e8e6; margin-bottom: 4px; }
+        .action-card span { font-size: 13px; color: #a0a0a0; line-height: 1.5; display: block; margin-bottom: 12px; }
+        .action-card a { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px;
+                         font-size: 13px; font-weight: 500; color: #1a1a1a; background: #e8e8e6;
+                         border-radius: 8px; text-decoration: none; }
+        .action-card a:hover { background: #ffffff; }
+        .action-card.info span { margin-bottom: 0; }
+        .footer { text-align: center; margin-top: 24px; }
+        .footer a { font-size: 13px; color: #a0a0a0; text-decoration: none; }
+        .footer a:hover { color: #e8e8e6; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h2>No account found</h2>
+        <p class="sub">This Google account isn&apos;t linked to an Olira organisation yet.</p>
+
+        <div class="action-card">
+            <p>Setting up a new organisation?</p>
+            <span>You&apos;ll need an access code from Olira to create your organisation.</span>
+            <a href="https://console.olira.ai/signup">Create organisation</a>
+        </div>
+
+        <div class="action-card info">
+            <p>Joining an existing team?</p>
+            <span>Ask your organisation admin to invite you. You&apos;ll receive an email with a link to join.</span>
+        </div>
+
+        <div class="footer">
+            <a href="javascript:window.close()">Close this window</a>
+        </div>
     </div>
 </body>
 </html>"""
@@ -146,6 +200,8 @@ class _ConsoleCallbackHandler(BaseHTTPRequestHandler):
             params = parse_qs(parsed.query)
             access_token = params.get("access_token", [None])[0]
             state = params.get("state", [None])[0]
+            error = params.get("error", [None])[0]
+            error_description = params.get("error_description", [None])[0]
             console_base = (_ConsoleCallbackHandler.console_url or "").rstrip("/")
             if access_token:
                 _ConsoleCallbackHandler.callback_result = {"access_token": access_token, "state": state}
@@ -162,14 +218,31 @@ class _ConsoleCallbackHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Length", str(len(body)))
                     self.end_headers()
                     self.wfile.write(body)
+            elif error:
+                _ConsoleCallbackHandler.callback_result = {
+                    "error": error,
+                    "error_description": error_description or "Authentication failed",
+                }
+                if error == "no_account":
+                    body = NO_ACCOUNT_HTML.encode()
+                else:
+                    body = ERROR_HTML.format(
+                        error_message=error_description or "Authentication failed",
+                        error_detail=f'<p class="detail">error={error}</p>',
+                    ).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
             else:
                 _ConsoleCallbackHandler.callback_result = {
                     "error": "no_token",
                     "error_description": "No access_token received",
                 }
                 body = ERROR_HTML.format(
-                    error_message="No token received",
-                    error_detail="The callback did not include an access_token.",
+                    error_message="No token received. Please try running <code>olira login</code> again.",
+                    error_detail='<p class="detail">no access_token in callback</p>',
                 ).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")

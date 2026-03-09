@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-03-09
+
+### Added
+
+- **`NO_ACCOUNT_HTML`** (`auth.py`): dedicated dark-mode error page shown in the browser when a Google sign-in user has no Olira org record — matches Console dark theme (`#1a1a1a` background, `#242424` cards) and mirrors the "No account found" layout in `AuthGuard.tsx` with two action cards (create org / join team)
+
+### Changed
+
+- **`ERROR_HTML`** (`auth.py`): redesigned to use Console dark-mode palette (replacing alarming red gradient) — neutral dark background, amber warning icon, clean card layout
+- **`/done` callback handler** (`auth.py`): now parses `error` and `error_description` query params forwarded from the fragment bridge; passes them through to the CLI result so `olira login` prints a clear error message (e.g. "no account linked to organisation") instead of the generic "no_token" fallback
+- **`CLI_DOCUMENTATION.md`**, **`README.md`**: updated `olira login` section to document Google (single-step) and email/password+TOTP MFA as the two supported sign-in methods
+
 ## [0.3.1] - 2026-03-06
 
 ### Changed
