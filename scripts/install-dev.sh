@@ -31,7 +31,11 @@ fi
 
 # Install all dependencies including dev extras
 echo "Installing dependencies using uv..."
-uv sync --extra dev
+# NOTE: `uv lock` is intentionally not run here. Use `uv sync --frozen` so installs
+# match the committed uv.lock without pulling transitive upgrades that can break CI,
+# devcontainers, or local builds. Run `uv lock` manually when intentionally updating
+# dependencies.
+uv sync --frozen --extra dev
 
 echo "Setup complete! You can now start developing."
 echo ""
