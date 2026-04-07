@@ -1,5 +1,5 @@
 # [Choice] Python version (use -bullseye variants on local arm64/Apple Silicon): 3, 3.11, 3.10, 3.9, 3.8, 3-bullseye, 3.11-bullseye, 3.10-bullseye, 3.9-bullseye, 3.8-bullseye
-ARG VARIANT="3.11-bullseye"
+ARG VARIANT="3.11-bookworm"
 FROM mcr.microsoft.com/devcontainers/python:${VARIANT}
 
 # Node.js is not needed for this CLI package
