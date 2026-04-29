@@ -100,7 +100,7 @@ Create a new API key
 | Flag       | Description                                                                                                                                                                              |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--name`   | Key name (skips the interactive prompt).                                                                                                                                                 |
-| `--scopes` | Scopes to grant (space-separated). Skips the interactive picker. Valid: mcp:patient-state, mcp:integration, sdk:event-log, sdk:patient-token, api:manage-patients, api:org-config. `...` |
+| `--scopes` | Scopes to grant (space-separated). Skips the interactive picker. Valid: mcp:patient-state, mcp:integration, sdk:event-log, sdk:patient-token, api:manage-patients, api:org-config, sdk:state-read. `...` |
 
 ### `olira keys list`
 
@@ -139,6 +139,7 @@ you have the key.
 | `sdk:patient-token`   | Mint short-lived, patient-locked JWTs for SDK use             |
 | `api:manage-patients` | Create, read, update, and deactivate patient records via REST |
 | `api:org-config`      | Read and update organisation platform configuration via REST  |
+| `sdk:state-read`      | Read patient state — stable data, event modules, summaries, event logs, state transitions, memories |
 
 Use `olira keys create --scopes mcp:patient-state mcp:integration ...` to grant specific scopes
 non-interactively, or omit `--scopes` to use the interactive picker.

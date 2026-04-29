@@ -54,7 +54,7 @@ def main() -> int:
         help=(
             "Scopes to grant (space-separated). Skips the interactive picker. "
             "Valid: mcp:patient-state, mcp:integration, sdk:event-log, "
-            "sdk:patient-token, api:manage-patients, api:org-config."
+            "sdk:patient-token, api:manage-patients, api:org-config, sdk:state-read."
         ),
     )
     keys_sub.add_parser("list", help="List API keys for your organization")
