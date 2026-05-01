@@ -14,7 +14,7 @@ VALID_SCOPES: dict[str, str] = {
     "sdk:patient-token": "Mint short-lived, patient-locked JWTs for SDK use",
     "api:manage-patients": "Create, read, update, and deactivate patient records via REST",
     "api:org-config": "Read and update organisation platform configuration via REST",
-    "sdk:state-read": "Read patient state — stable data, event modules, summaries, event logs, state transitions, memories",
+    "sdk:state-read": "Read patient state — stable data, event modules, summaries, logs, events, memories",
 }
 _DEFAULT_SCOPE = "mcp:patient-state"
 
