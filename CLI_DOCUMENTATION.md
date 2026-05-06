@@ -1,5 +1,6 @@
 > **Maintained by:** Olira Engineering  
-> **Published at:** `olira.ai/api-docs` → CLI tab
+> **Published at:** `olira.ai/api-docs` → CLI tab  
+> **Status:** **BETA** — CLI commands and flags may change between releases.
 
 # Olira CLI
 
@@ -12,7 +13,6 @@ available to your AI agents.
 
 **Version:** `0.3.2`
 
----
 
 ## Related docs
 
@@ -21,7 +21,6 @@ available to your AI agents.
 | **MCP Patient State** (`olira.ai/api-docs` → MCP tab) | Tools for querying patient health state from AI agents | The MCP server is what your agent calls once the CLI has configured your credentials |
 | **Python SDK** (`olira.ai/api-docs` → Python SDK tab) | `olira.log()`, `olira.get_patient_token()`, patient management | Use keys created by the CLI to authenticate the SDK; SDK mints Patient Tokens for MCP patient-facing agents |
 
----
 
 ## Installation
 
@@ -41,7 +40,6 @@ Verify:
 olira --help
 ```
 
----
 
 ## Quick start
 
@@ -56,7 +54,6 @@ olira keys create --name "my-integration" --scopes sdk:event-log api:manage-pati
 olira configure cursor
 ```
 
----
 
 ## Commands
 
@@ -122,7 +119,6 @@ Write MCP client config
 | -------- | ---------------------------------------------------- |
 | `client` | Target client (cursor; claude-code planned) `cursor` |
 
----
 
 ## Scopes
 
@@ -139,12 +135,11 @@ you have the key.
 | `sdk:patient-token`   | Mint short-lived, patient-locked JWTs for SDK use             |
 | `api:manage-patients` | Create, read, update, and deactivate patient records via REST |
 | `api:org-config`      | Read and update organisation platform configuration via REST  |
-| `sdk:state-read`      | Read patient state — stable data, event modules, summaries, event logs, state transitions, memories |
+| `sdk:state-read`      | Read patient state — stable data, event modules, summaries, logs, events, memories |
 
 Use `olira keys create --scopes mcp:patient-state mcp:integration ...` to grant specific scopes
 non-interactively, or omit `--scopes` to use the interactive picker.
 
----
 
 ## Credentials file
 
@@ -164,7 +159,6 @@ Tokens expire; re-run `olira login` to refresh.
 > `.cursor/mcp.json`. When the token expires, re-run `olira configure cursor`
 > or replace the token with a long-lived API key.
 
----
 
 ## Exit codes
 
@@ -173,7 +167,6 @@ Tokens expire; re-run `olira login` to refresh.
 | `0`  | Success                                                                     |
 | `1`  | Error (authentication failure, API error, validation error, user cancelled) |
 
----
 
 ## Common workflows
 
