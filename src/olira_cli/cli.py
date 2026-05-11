@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+from typing import Any
 
 from olira_cli import _INTERNAL_BUILD
 
@@ -17,7 +18,7 @@ def main() -> int:
     """Main entry point. Dispatches to subcommands."""
     parser = argparse.ArgumentParser(
         prog="olira",
-        description="Olira CLI — authenticate and configure MCP access.",
+        description="Olira CLI — authenticate, manage API keys, configure MCP access, and upload historical patient data.",
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -54,7 +55,8 @@ def main() -> int:
         help=(
             "Scopes to grant (space-separated). Skips the interactive picker. "
             "Valid: mcp:patient-state, mcp:integration, sdk:event-log, "
-            "sdk:patient-token, api:manage-patients, api:org-config, sdk:state-read."
+            "sdk:patient-token, api:manage-patients, api:org-config, sdk:state-read, "
+            "sdk:historical-ingest."
         ),
     )
     keys_sub.add_parser("list", help="List API keys for your organization")
@@ -67,6 +69,123 @@ def main() -> int:
         "client",
         choices=["cursor"],
         help="Target client (cursor; claude-code planned)",
+    )
+
+    # validate
+    validate_parser = subparsers.add_parser(
+        "validate",
+        help="Validate a .jsonl file before uploading",
+    )
+    validate_parser.add_argument("file", help="Path to the .jsonl file to validate")
+    validate_parser.add_argument(
+        "--check-org",
+        action="store_true",
+        help="Also check patient references against live org patients (requires login)",
+    )
+    validate_parser.add_argument(
+        "--skip-order-check",
+        action="store_true",
+        help="Skip the check that patients are declared before logs that reference them",
+    )
+
+    # ingest
+    ingest_parser = subparsers.add_parser(
+        "ingest",
+        help="Upload and manage historical data ingestion jobs",
+        description="Upload a JSONL file of historical patient data and manage the ingestion pipeline. "
+        "Subcommands: upload, list, status, confirm, cancel, retry-backfill.",
+    )
+    ingest_sub = ingest_parser.add_subparsers(dest="ingest_command", help="ingest subcommands")
+
+    # ingest upload
+    ingest_upload = ingest_sub.add_parser("upload", help="Upload a .jsonl file and create an ingestion job")
+    ingest_upload.add_argument("file", help="Path to the .jsonl file to upload")
+    ingest_upload.add_argument(
+        "--no-confirm",
+        action="store_true",
+        help="Skip the AWAITING_CONFIRMATION review step and run to completion automatically",
+    )
+    ingest_upload.add_argument(
+        "--summary-types",
+        nargs="+",
+        metavar="TYPE",
+        help="AI summary types to generate (e.g. emotional_state_snapshot clinical_note)",
+    )
+    ingest_upload.add_argument(
+        "--idempotency-key",
+        default=None,
+        help="Idempotency key (auto-generated if omitted)",
+    )
+    ingest_upload.add_argument(
+        "--no-backfill",
+        action="store_true",
+        help="Skip Stage 5 (AI view generation) after graph replay — data is fully imported but Console views are not populated",
+    )
+    ingest_upload.add_argument(
+        "--watch",
+        action="store_true",
+        help="Tail job progress until terminal or AWAITING_CONFIRMATION",
+    )
+
+    # ingest list
+    ingest_list = ingest_sub.add_parser("list", help="List ingestion jobs for the org")
+    ingest_list.add_argument("--page", type=int, default=1, help="Page number (default: 1)")
+    ingest_list.add_argument("--page-size", type=int, default=10, dest="page_size", help="Jobs per page (default: 10)")
+    ingest_list.add_argument(
+        "--status",
+        default=None,
+        metavar="STATUS",
+        help="Filter by status (e.g. failed, completed, completed_with_errors, awaiting_confirmation)",
+    )
+
+    # ingest status
+    ingest_status = ingest_sub.add_parser("status", help="Show status for a single job")
+    ingest_status.add_argument("job_id", help="Job ID")
+    ingest_status.add_argument(
+        "--watch",
+        action="store_true",
+        help="Tail progress until terminal or AWAITING_CONFIRMATION",
+    )
+
+    # ingest confirm
+    ingest_confirm = ingest_sub.add_parser("confirm", help="Confirm a job at AWAITING_CONFIRMATION")
+    ingest_confirm.add_argument("job_id", help="Job ID")
+    ingest_confirm.add_argument(
+        "--summary-types",
+        nargs="+",
+        metavar="TYPE",
+        help="Set AI summary types before confirming",
+    )
+    ingest_confirm.add_argument(
+        "--no-backfill",
+        action="store_true",
+        help="Skip Stage 5 (AI view generation) after graph replay",
+    )
+    ingest_confirm.add_argument(
+        "--watch",
+        action="store_true",
+        help="Tail progress after confirmation",
+    )
+
+    # ingest cancel
+    ingest_cancel = ingest_sub.add_parser("cancel", help="Cancel an ingestion job")
+    ingest_cancel.add_argument("job_id", help="Job ID")
+    ingest_cancel.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip confirmation prompt",
+    )
+
+    # ingest retry-backfill
+    ingest_retry = ingest_sub.add_parser(
+        "retry-backfill",
+        help="Retry view backfill on a COMPLETED_WITH_ERRORS job",
+    )
+    ingest_retry.add_argument("job_id", help="Job ID")
+    ingest_retry.add_argument(
+        "--watch",
+        action="store_true",
+        help="Tail progress until the backfill completes",
     )
 
     args = parser.parse_args()
@@ -87,6 +206,10 @@ def main() -> int:
         return _cmd_keys(args)
     if args.command == "configure":
         return _cmd_configure(args)
+    if args.command == "validate":
+        return _cmd_validate(args)
+    if args.command == "ingest":
+        return _cmd_ingest(args)
 
     parser.print_help()
     return 0
@@ -98,15 +221,7 @@ _PUBLIC_ENVS = {"dev", "stage", "prod"}
 
 def _cmd_login(args: argparse.Namespace) -> int:
     env = args.env
-    # Customers (prod build) get no --env flag; default to prod.
-    # Internal builds require --env or explicit URLs.
     if env is None and not args.mcp_server:
-        if _INTERNAL_BUILD:
-            print(
-                "Error: --env is required. Use --env dev, --env stage, --env prod, or --env local.",
-                file=sys.stderr,
-            )
-            return 1
         env = "prod"
     if env is not None and env not in _VALID_ENVS:
         print(
@@ -152,6 +267,32 @@ def _cmd_configure(args: argparse.Namespace) -> int:
     from olira_cli.api import cmd_configure
 
     return cmd_configure(args.client)
+
+
+def _cmd_validate(args: argparse.Namespace) -> int:
+    from olira_cli.validate import cmd_validate
+
+    return cmd_validate(args)
+
+
+def _cmd_ingest(args: argparse.Namespace) -> int:
+    from olira_cli.ingest import cmd_cancel, cmd_confirm, cmd_list, cmd_retry_backfill, cmd_status, cmd_upload
+
+    dispatch: dict[str, Any] = {
+        "upload": cmd_upload,
+        "list": cmd_list,
+        "status": cmd_status,
+        "confirm": cmd_confirm,
+        "cancel": cmd_cancel,
+        "retry-backfill": cmd_retry_backfill,
+    }
+
+    sub = getattr(args, "ingest_command", None)
+    if sub is None or sub not in dispatch:
+        print("Usage: olira ingest {upload|list|status|confirm|cancel|retry-backfill}", file=sys.stderr)
+        return 1
+
+    return dispatch[sub](args)
 
 
 if __name__ == "__main__":

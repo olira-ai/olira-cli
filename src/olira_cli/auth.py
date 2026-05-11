@@ -375,8 +375,20 @@ class _ConsoleCallbackServer:
         return f"http://localhost:{self.port}/callback"
 
 
-async def _validate_token_with_mcp(token: str, mcp_server: str) -> bool:
-    """POST tools/list to MCP to validate the token. Returns True if 200 and no JSON-RPC error."""
+class _MCPValidationResult:
+    ok: bool
+    unreachable: bool
+
+    def __init__(self, ok: bool, unreachable: bool = False):
+        self.ok = ok
+        self.unreachable = unreachable
+
+
+async def _validate_token_with_mcp(token: str, mcp_server: str) -> _MCPValidationResult:
+    """POST tools/list to MCP to validate the token.
+    Returns ok=True on success, ok=False+unreachable=True if the server is down,
+    ok=False+unreachable=False if the server explicitly rejected the token.
+    """
     import httpx
 
     url = mcp_server.rstrip("/") + "/mcp"
@@ -384,14 +396,16 @@ async def _validate_token_with_mcp(token: str, mcp_server: str) -> bool:
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             r = await client.post(url, json=payload, headers={"Authorization": f"Bearer {token}"})
+            if r.status_code in (401, 403):
+                return _MCPValidationResult(ok=False)
             if r.status_code != 200:
-                return False
+                return _MCPValidationResult(ok=False, unreachable=True)
             data = r.json()
             if "error" in data:
-                return False
-            return "result" in data
+                return _MCPValidationResult(ok=False)
+            return _MCPValidationResult(ok="result" in data)
     except Exception:
-        return False
+        return _MCPValidationResult(ok=False, unreachable=True)
 
 
 def run_login(
@@ -441,11 +455,12 @@ def run_login(
         redirect_uri = handler.get_redirect_uri()
         query = urlencode({"redirect_uri": redirect_uri, "state": nonce})
         login_url = f"{console_url.rstrip('/')}/cli-login?{query}"
-        print("Opening browser for authentication...")
+        print("Opening browser for authentication…")
+        print(f"  {login_url}\n")
         try:
             webbrowser.open(login_url)
         except Exception:
-            print("Could not open browser — open this URL manually:\n", login_url)
+            pass
         print("Waiting for authentication… (press Ctrl+C to cancel)\n")
         try:
             access_token = await handler.wait_for_token(nonce)
@@ -453,10 +468,13 @@ def run_login(
             print(f"Error: {e}", file=__import__("sys").stderr)
             return 1
 
-        valid = await _validate_token_with_mcp(access_token, mcp_server)
-        if not valid:
-            print("Error: Token was rejected by MCP server. Login failed.", file=__import__("sys").stderr)
-            return 1
+        result = await _validate_token_with_mcp(access_token, mcp_server)
+        if not result.ok:
+            if result.unreachable:
+                print(f"  Warning: MCP server unreachable ({mcp_server}) — skipping token validation.")
+            else:
+                print("Error: Token was rejected by MCP server. Login failed.", file=__import__("sys").stderr)
+                return 1
 
         payload = _decode_jwt_payload(access_token)
         identity = "unknown"

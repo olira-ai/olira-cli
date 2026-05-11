@@ -1,0 +1,13 @@
+{
+  "_comment": "Copy this file to cli_ingest.config.json and fill in your values.",
+
+  "api_key": "<olira_dev_… key with sdk:historical-ingest scope>",
+
+  "base_api": "http://localhost:8080/app-api",
+
+  "_comment_console_token": "Used only for patient cleanup (section J --check-org). Optional.",
+  "console_token": "<Auth0 Bearer token — tenant member of the test org>",
+
+  "_comment_olira_bin": "Path to the olira binary. Defaults to .venv/bin/olira or PATH.",
+  "olira_bin": ""
+}

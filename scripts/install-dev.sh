@@ -18,23 +18,12 @@ if ! command -v uv &> /dev/null; then
     fi
 fi
 
-# olira-cli only depends on public PyPI packages (httpx etc.) — no CodeArtifact needed.
-# If a CODE_ARTIFACT_TOKEN is already set in the environment (e.g. from a parent install
-# script), we honour it; otherwise we fall back to plain PyPI.
-if [ -n "$CODE_ARTIFACT_TOKEN" ]; then
-    export UV_INDEX_URL="https://aws:${CODE_ARTIFACT_TOKEN}@raia-health-891612581662.d.codeartifact.us-east-1.amazonaws.com/pypi/olira-private-dev/simple/"
-    echo "CodeArtifact token detected — using private index."
-else
-    export UV_INDEX_URL="https://pypi.org/simple"
-    echo "No CodeArtifact token — using PyPI."
-fi
-
-# Install all dependencies including dev extras
-echo "Installing dependencies using uv..."
+# Install all dependencies including dev extras.
 # NOTE: `uv lock` is intentionally not run here. Use `uv sync --frozen` so installs
 # match the committed uv.lock without pulling transitive upgrades that can break CI,
 # devcontainers, or local builds. Run `uv lock` manually when intentionally updating
 # dependencies.
+echo "Installing dependencies using uv..."
 uv sync --frozen --extra dev
 
 echo "Setup complete! You can now start developing."

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-05-11
+
+### Added
+
+- **`olira validate`** (`validate.py`): Local JSONL validation before uploading. Checks JSON syntax, record types, required fields, known event types (full `OliraLogType` catalog), PII in `patient_id` (email, phone, SSN), and patient-before-log ordering. `--check-org` cross-checks patient IDs against live org patients via the API. `--skip-order-check` bypasses the ordering warning.
+- **`olira ingest`** command group (`ingest.py`): Full historical data ingestion workflow from the CLI:
+  - `upload <file>` — presigned S3 URL → upload → create job; `--no-confirm`, `--summary-types`, `--idempotency-key`, `--watch`
+  - `list` — paginated job table with `--page` / `--page-size`
+  - `status <job_id>` — job detail with event type breakdown; `--watch` to tail
+  - `confirm <job_id>` — confirm at `AWAITING_CONFIRMATION`; optional `--summary-types` patch + `--watch`
+  - `cancel <job_id>` — cancel with interactive prompt; `--yes` to skip
+- **`sdk:historical-ingest` scope** added to `VALID_SCOPES` in `api.py` — appears in the interactive key creation picker and `--scopes` help text.
+- **`CLI_DOCUMENTATION.md`** updated with full reference for `validate`, `ingest`, and the new scope.
+- **E2E test** (`scripts/e2e/cli_ingest_e2e.py`): 11-section subprocess-based test covering the full ingestion CLI workflow; config example at `scripts/e2e/cli_ingest.config.example.json`.
+- **`.gitignore`**: `scripts/e2e/cli_ingest.config.json` ignored so API keys are never committed.
+
 ## [0.3.5] - 2026-05-01
 
 ### Changed

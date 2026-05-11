@@ -15,6 +15,7 @@ VALID_SCOPES: dict[str, str] = {
     "api:manage-patients": "Create, read, update, and deactivate patient records via REST",
     "api:org-config": "Read and update organisation platform configuration via REST",
     "sdk:state-read": "Read patient state — stable data, event modules, summaries, logs, events, memories",
+    "sdk:historical-ingest": "Upload and manage bulk historical data ingestion jobs via the Olira SDK",
 }
 _DEFAULT_SCOPE = "mcp:patient-state"
 
