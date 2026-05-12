@@ -109,7 +109,7 @@ def main() -> int:
         "--summary-types",
         nargs="+",
         metavar="TYPE",
-        help="AI summary types to generate (e.g. emotional_state_snapshot clinical_note)",
+        help="View types to generate (e.g. emotional_state_snapshot clinical_note)",
     )
     ingest_upload.add_argument(
         "--idempotency-key",
@@ -154,7 +154,7 @@ def main() -> int:
         "--summary-types",
         nargs="+",
         metavar="TYPE",
-        help="Set AI summary types before confirming",
+        help="Set view types before confirming",
     )
     ingest_confirm.add_argument(
         "--no-backfill",

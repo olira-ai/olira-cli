@@ -478,7 +478,7 @@ def _print_job_detail(job: dict[str, Any]) -> None:
 
     by_type = job.get("logs_by_event_type") or {}
     if by_type:
-        print("  Event types:")
+        print("  Log types:")
         for et, count in sorted(by_type.items(), key=lambda x: -x[1]):
             label = et.replace("_", " ").title()
             print(f"    {label:<36} {count}")

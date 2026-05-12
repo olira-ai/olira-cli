@@ -213,7 +213,7 @@ def cmd_validate(args: Any) -> int:
                     errors.append(f"L{lineno}: log record is missing 'event_type'")
                 elif et not in KNOWN_EVENT_TYPES:
                     errors.append(
-                        f"L{lineno}: unknown event_type {et!r} — check the event type catalog at olira.ai/api-docs"
+                        f"L{lineno}: unknown log_type {et!r} — check the log type catalog at olira.ai/api-docs"
                     )
                 else:
                     event_type_counts[et] = event_type_counts.get(et, 0) + 1
@@ -263,7 +263,7 @@ def cmd_validate(args: Any) -> int:
     if event_type_counts:
         total_logs = sum(event_type_counts.values())
         print()
-        print(f"  {BOLD}{'Event type':<38} {'Count':>10}  {'%':>4}{RESET}")
+        print(f"  {BOLD}{'Log type':<38} {'Count':>10}  {'%':>4}{RESET}")
         print(divider)
         for et, count in sorted(event_type_counts.items(), key=lambda x: -x[1]):
             label = et.replace("_", " ").title()

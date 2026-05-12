@@ -134,7 +134,7 @@ Write MCP client config
 ### `olira validate`
 
 Validate a `.jsonl` file locally before uploading. Checks every record for
-correct structure, known event types, PII in `patient_id`, and whether log
+correct structure, known log types, PII in `patient_id`, and whether log
 records reference patients that appear earlier in the file (or already exist in
 your org when `--check-org` is passed). Exits `0` if clean, `1` if any errors
 are found.
@@ -160,7 +160,7 @@ olira validate data.jsonl --skip-order-check   # skip the patient-before-log ord
 | Patient anchor rule | Patient records must have at least one of: `external_identifiers`, `email`, `phone_number`, `first_name`, `last_name`, or `date_of_birth` |
 | Required log fields | Logs must have `event_type`, `patient_id`, and `timestamp` |
 | Timestamp format | `timestamp` must be a valid ISO 8601 datetime (e.g. `2025-01-15T09:00:00Z`) |
-| Event type | `event_type` must be a value from the Olira event type catalog |
+| Log type | `event_type` must be a value from the Olira log type catalog |
 | PII in patient\_id | `patient_id` must not look like an email, US phone number, or SSN |
 | Patient ordering | Logs should reference patients declared earlier in the file (warning, not error) |
 
@@ -191,7 +191,7 @@ olira ingest upload data.jsonl --idempotency-key my-unique-key-2026
 | `file`              | Path to the `.jsonl` file to upload                                                      |
 | `--no-confirm`      | Skip the review stage and run the full pipeline automatically                            |
 | `--no-backfill`     | Skip Stage 5 (AI view generation) after graph replay. Data is fully imported and queryable but Console views are not populated. |
-| `--summary-types`   | AI summary types to generate (space-separated, e.g. `emotional_state_snapshot`)         |
+| `--summary-types`   | view types to generate (space-separated, e.g. `emotional_state_snapshot`)         |
 | `--idempotency-key` | Unique key for this upload. Resubmitting the same key while a job is active returns the existing job instead of creating a new one. Auto-generated if omitted. |
 | `--watch`           | Tail progress after upload until the job reaches `AWAITING_CONFIRMATION` or a terminal status |
 
@@ -227,7 +227,7 @@ olira ingest status <job_id> --watch
 
 #### `olira ingest confirm`
 
-Confirm a job at `AWAITING_CONFIRMATION` to start Phase 2 (graph replay + AI backfill).
+Confirm a job at `AWAITING_CONFIRMATION` to start Phase 2 (graph replay + view backfill).
 
 ```bash
 olira ingest confirm <job_id>
@@ -238,7 +238,7 @@ olira ingest confirm <job_id> --watch
 | Flag              | Description                                                  |
 | ----------------- | ------------------------------------------------------------ |
 | `job_id`          | The job ID to confirm                                        |
-| `--summary-types` | Set AI summary types before confirming (space-separated)     |
+| `--summary-types` | Set view types before confirming (space-separated)     |
 | `--no-backfill`   | Skip Stage 5 (AI view generation) before confirming          |
 | `--watch`         | Tail progress after confirming until the job reaches terminal |
 
@@ -383,7 +383,7 @@ olira ingest confirm <job_id> --summary-types emotional_state_snapshot --watch
 olira ingest upload patients_and_logs.jsonl --no-confirm --watch
 ```
 
-### Check job status and event type breakdown
+### Check job status and log type breakdown
 
 ```bash
 olira ingest status <job_id>
