@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Add `pyinstaller` to `release` extras so the binary release workflow can build binaries.
+- Bump GitHub Actions (`actions/checkout`, `actions/setup-python`, `astral-sh/setup-uv`, `actions/upload-artifact`, `actions/download-artifact`) to Node.js 24-compatible versions.
 
 ## [1.0.0] - 2026-05-20
 
