@@ -17,9 +17,6 @@ jobs:
           - os: macos-latest
             arch: arm64
             target: macos-arm64
-          - os: macos-13
-            arch: x86_64
-            target: macos-x86_64
           - os: ubuntu-latest
             arch: x86_64
             target: linux-x86_64
@@ -114,7 +111,6 @@ jobs:
             --title "olira-cli v${VERSION}" \
             --notes-file /tmp/release-notes.md \
             /tmp/binaries/olira-macos-arm64 \
-            /tmp/binaries/olira-macos-x86_64 \
             /tmp/binaries/olira-linux-x86_64 \
             /tmp/binaries/checksums.txt
 
@@ -124,7 +120,6 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           SHA_ARM64=$(grep "olira-macos-arm64" /tmp/binaries/checksums.txt | awk '{print $1}')
-          SHA_X86_64=$(grep "olira-macos-x86_64" /tmp/binaries/checksums.txt | awk '{print $1}')
           SHA_LINUX=$(grep "olira-linux-x86_64" /tmp/binaries/checksums.txt | awk '{print $1}')
 
           git clone https://x-access-token:${GH_TOKEN}@github.com/olira-ai/homebrew-tap.git /tmp/homebrew-tap
@@ -134,7 +129,6 @@ jobs:
 
           sed -i "s/version \".*\"/version \"${VERSION}\"/" $FORMULA
           sed -i "s/PLACEHOLDER_ARM64_SHA256/${SHA_ARM64}/" $FORMULA
-          sed -i "s/PLACEHOLDER_X86_64_SHA256/${SHA_X86_64}/" $FORMULA
           sed -i "s/PLACEHOLDER_LINUX_X86_64_SHA256/${SHA_LINUX}/" $FORMULA
 
           cd /tmp/homebrew-tap

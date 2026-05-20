@@ -1,24 +1,15 @@
 class Olira < Formula
   desc "Olira AI - CLI for authenticating and configuring MCP access"
   homepage "https://olira.ai"
-  version "0.3.0"
+  version "1.0.2"
   license "MIT"
 
   on_macos do
-    if Hardware::CPU.arm?
-      url "https://github.com/olira-ai/olira-cli/releases/download/v#{version}/olira-macos-arm64"
-      sha256 "PLACEHOLDER_ARM64_SHA256"
+    url "https://github.com/olira-ai/olira-cli/releases/download/v#{version}/olira-macos-arm64"
+    sha256 "PLACEHOLDER_ARM64_SHA256"
 
-      def install
-        bin.install "olira-macos-arm64" => "olira"
-      end
-    else
-      url "https://github.com/olira-ai/olira-cli/releases/download/v#{version}/olira-macos-x86_64"
-      sha256 "PLACEHOLDER_X86_64_SHA256"
-
-      def install
-        bin.install "olira-macos-x86_64" => "olira"
-      end
+    def install
+      bin.install "olira-macos-arm64" => "olira"
     end
   end
 
