@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "olira-cli"
-version = "1.0.0"
+version = "1.0.1"
 authors = [
   { name = "Olira AI", email = "dev@olira.ai" },
 ]
@@ -34,6 +34,9 @@ dev = [
     "ruff>=0.5",
     "pytest>=7.4",
     "pytest-cov>=5.0",
+]
+release = [
+    "pyinstaller>=6.0",
 ]
 
 [project.scripts]
