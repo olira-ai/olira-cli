@@ -27,15 +27,15 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v8
         with:
           version: "latest"
 
@@ -62,7 +62,7 @@ jobs:
         run: mv dist/olira dist/olira-${{ matrix.target }}
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: olira-${{ matrix.target }}
           path: dist/olira-${{ matrix.target }}
@@ -74,14 +74,14 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Read version
         id: version
         run: echo "version=$(grep '^version' pyproject.toml | awk -F'"' '{print $2}')" >> $GITHUB_OUTPUT
 
       - name: Download all binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: /tmp/binaries
           pattern: olira-*
