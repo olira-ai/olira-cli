@@ -40,7 +40,7 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: bash scripts/uv.sh sync --extra dev
+        run: bash scripts/uv.sh sync --extra dev --extra release
 
       - name: Flip _INTERNAL_BUILD for customer release
         run: |
