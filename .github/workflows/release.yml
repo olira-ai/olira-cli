@@ -105,7 +105,6 @@ jobs:
           TAG="v${VERSION}"
 
           gh release delete "$TAG" --yes 2>/dev/null || true
-          git push --delete origin "$TAG" 2>/dev/null || true
 
           gh release create "$TAG" \
             --title "olira-cli v${VERSION}" \
