@@ -1,7 +1,7 @@
 class Olira < Formula
   desc "Olira AI - CLI for authenticating and configuring MCP access"
   homepage "https://olira.ai"
-  version "0.3.0"
+  version "1.0.2"
   license "MIT"
 
   on_macos do
