@@ -33,16 +33,27 @@ get_changelog_version() {
     fi
 }
 
+# Function to extract version from homebrew formula
+get_formula_version() {
+    if [ -f homebrew/olira.rb ]; then
+        grep -E '^  version ' homebrew/olira.rb | sed 's/  version "\(.*\)"/\1/' || echo ""
+    else
+        echo ""
+    fi
+}
+
 # Get versions
 PYPROJECT_VERSION=$(get_pyproject_version)
 INIT_VERSION=$(get_init_version)
 CHANGELOG_VERSION=$(get_changelog_version)
+FORMULA_VERSION=$(get_formula_version)
 
 echo ""
 echo -e "${BLUE}📋 Found versions:${NC}"
 echo "  - pyproject.toml: ${PYPROJECT_VERSION:-<not found>}"
 echo "  - src/olira_cli/__init__.py: ${INIT_VERSION:-<not found>}"
 echo "  - CHANGELOG.md: ${CHANGELOG_VERSION:-<not found>}"
+echo "  - homebrew/olira.rb: ${FORMULA_VERSION:-<not found>}"
 
 # Check if versions were found
 if [ -z "$PYPROJECT_VERSION" ]; then
@@ -69,6 +80,14 @@ if [ "$PYPROJECT_VERSION" != "$INIT_VERSION" ]; then
     echo -e "${RED}❌ ERROR: Version mismatch!${NC}"
     echo -e "${RED}   pyproject.toml: $PYPROJECT_VERSION${NC}"
     echo -e "${RED}   __init__.py: $INIT_VERSION${NC}"
+    exit 1
+fi
+
+if [ -n "$FORMULA_VERSION" ] && [ "$PYPROJECT_VERSION" != "$FORMULA_VERSION" ]; then
+    echo -e "${RED}❌ ERROR: Version mismatch!${NC}"
+    echo -e "${RED}   pyproject.toml: $PYPROJECT_VERSION${NC}"
+    echo -e "${RED}   homebrew/olira.rb: $FORMULA_VERSION${NC}"
+    echo -e "${RED}   Please update the version in homebrew/olira.rb${NC}"
     exit 1
 fi
 
@@ -125,4 +144,7 @@ echo -e "${GREEN}✅ Version check passed!${NC}"
 echo -e "${GREEN}   All versions are consistent: $PYPROJECT_VERSION${NC}"
 if [ -n "$CHANGELOG_VERSION" ]; then
     echo -e "${GREEN}   Changelog entry found: $CHANGELOG_VERSION${NC}"
+fi
+if [ -n "$FORMULA_VERSION" ]; then
+    echo -e "${GREEN}   Homebrew formula version: $FORMULA_VERSION${NC}"
 fi
