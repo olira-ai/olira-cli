@@ -1,0 +1,146 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  release-binaries:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            arch: arm64
+            target: macos-arm64
+          - os: macos-13
+            arch: x86_64
+            target: macos-x86_64
+          - os: ubuntu-latest
+            arch: x86_64
+            target: linux-x86_64
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: bash scripts/uv.sh sync --extra dev
+
+      - name: Flip _INTERNAL_BUILD for customer release
+        run: |
+          sed -i.bak 's/_INTERNAL_BUILD: bool = True/_INTERNAL_BUILD: bool = False/' src/olira_cli/__init__.py
+
+      - name: Read version
+        id: version
+        run: echo "version=$(grep '^version' pyproject.toml | awk -F'"' '{print $2}')" >> $GITHUB_OUTPUT
+
+      - name: Build binary with PyInstaller
+        run: |
+          bash scripts/uv.sh run pyinstaller \
+            --onefile \
+            --name olira \
+            --strip \
+            src/olira_cli/cli.py
+
+      - name: Rename binary with platform suffix
+        run: mv dist/olira dist/olira-${{ matrix.target }}
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: olira-${{ matrix.target }}
+          path: dist/olira-${{ matrix.target }}
+          retention-days: 1
+
+  create-release:
+    needs: release-binaries
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: echo "version=$(grep '^version' pyproject.toml | awk -F'"' '{print $2}')" >> $GITHUB_OUTPUT
+
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/binaries
+          pattern: olira-*
+          merge-multiple: true
+
+      - name: Compute SHA-256 checksums
+        run: |
+          cd /tmp/binaries
+          sha256sum olira-* > checksums.txt
+          cat checksums.txt
+
+      - name: Extract changelog entry
+        id: changelog
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          NOTES=$(awk "/^## \[$VERSION\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          echo "$NOTES" > /tmp/release-notes.md
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          TAG="v${VERSION}"
+
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          git push --delete origin "$TAG" 2>/dev/null || true
+
+          gh release create "$TAG" \
+            --title "olira-cli v${VERSION}" \
+            --notes-file /tmp/release-notes.md \
+            /tmp/binaries/olira-macos-arm64 \
+            /tmp/binaries/olira-macos-x86_64 \
+            /tmp/binaries/olira-linux-x86_64 \
+            /tmp/binaries/checksums.txt
+
+      - name: Update Homebrew formula in tap repo
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          SHA_ARM64=$(grep "olira-macos-arm64" /tmp/binaries/checksums.txt | awk '{print $1}')
+          SHA_X86_64=$(grep "olira-macos-x86_64" /tmp/binaries/checksums.txt | awk '{print $1}')
+          SHA_LINUX=$(grep "olira-linux-x86_64" /tmp/binaries/checksums.txt | awk '{print $1}')
+
+          git clone https://x-access-token:${GH_TOKEN}@github.com/olira-ai/homebrew-tap.git /tmp/homebrew-tap
+
+          FORMULA=/tmp/homebrew-tap/Formula/olira.rb
+          cp homebrew/olira.rb $FORMULA
+
+          sed -i "s/version \".*\"/version \"${VERSION}\"/" $FORMULA
+          sed -i "s/PLACEHOLDER_ARM64_SHA256/${SHA_ARM64}/" $FORMULA
+          sed -i "s/PLACEHOLDER_X86_64_SHA256/${SHA_X86_64}/" $FORMULA
+          sed -i "s/PLACEHOLDER_LINUX_X86_64_SHA256/${SHA_LINUX}/" $FORMULA
+
+          cd /tmp/homebrew-tap
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add Formula/olira.rb
+          git diff --staged --quiet && echo "Formula unchanged, skipping commit" && exit 0
+          git commit -m "chore: update olira to v${VERSION}"
+          git push
