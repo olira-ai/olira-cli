@@ -86,7 +86,10 @@ if [ "${CI:-false}" = "true" ] && [ -n "${GITHUB_BASE_REF:-}" ]; then
     echo ""
     echo -e "${BLUE}🔍 Checking if version changed from base branch ($GITHUB_BASE_REF)...${NC}"
 
-    BASE_VERSION=$(git show "origin/${GITHUB_BASE_REF}:packages/olira-cli/pyproject.toml" 2>/dev/null | grep -E '^version = ' | sed 's/version = "\(.*\)"/\1/' || echo "")
+    BASE_VERSION=$(git show "origin/${GITHUB_BASE_REF}:pyproject.toml" 2>/dev/null | grep -E '^version = ' | sed 's/version = "\(.*\)"/\1/' || echo "")
+    if [ -z "$BASE_VERSION" ]; then
+        BASE_VERSION=$(git show "origin/${GITHUB_BASE_REF}:packages/olira-cli/pyproject.toml" 2>/dev/null | grep -E '^version = ' | sed 's/version = "\(.*\)"/\1/' || echo "")
+    fi
 
     if [ -z "$BASE_VERSION" ]; then
         echo -e "${YELLOW}⚠️  Could not determine base branch version, skipping change check${NC}"
@@ -101,7 +104,10 @@ if [ "${CI:-false}" = "true" ] && [ -n "${GITHUB_BASE_REF:-}" ]; then
     fi
 elif command -v git &> /dev/null && git rev-parse --git-dir &> /dev/null; then
     BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
-    BASE_VERSION=$(git show "origin/${BASE_BRANCH}:packages/olira-cli/pyproject.toml" 2>/dev/null | grep -E '^version = ' | sed 's/version = "\(.*\)"/\1/' || echo "")
+    BASE_VERSION=$(git show "origin/${BASE_BRANCH}:pyproject.toml" 2>/dev/null | grep -E '^version = ' | sed 's/version = "\(.*\)"/\1/' || echo "")
+    if [ -z "$BASE_VERSION" ]; then
+        BASE_VERSION=$(git show "origin/${BASE_BRANCH}:packages/olira-cli/pyproject.toml" 2>/dev/null | grep -E '^version = ' | sed 's/version = "\(.*\)"/\1/' || echo "")
+    fi
 
     if [ -n "$BASE_VERSION" ] && [ "$PYPROJECT_VERSION" = "$BASE_VERSION" ]; then
         echo ""

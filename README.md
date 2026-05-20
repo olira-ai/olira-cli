@@ -2,6 +2,8 @@
 
 Command-line tool for authenticating with Olira and configuring MCP (Model Context Protocol) access for tools like Cursor.
 
+Full command reference: [olira.ai/api-docs](https://olira.ai/api-docs)
+
 ## Installation
 
 **macOS / Linux — Homebrew (recommended):**
@@ -16,7 +18,7 @@ brew install olira-ai/tap/olira
 curl -fsSL https://install.olira.ai | sh
 ```
 
-**Manual** — download the binary for your platform from [GitHub Releases](https://github.com/olira-ai/olira-platform/releases), make it executable, and move it to your `$PATH`:
+**Manual** — download the binary for your platform from [GitHub Releases](https://github.com/olira-ai/olira-cli/releases), make it executable, and move it to your `$PATH`:
 
 ```bash
 chmod +x olira-macos-arm64
@@ -29,15 +31,7 @@ Verify:
 olira --version
 ```
 
-**Monorepo / development install** (host terminal, outside a devcontainer):
-
-```bash
-cd packages/olira-cli
-bash scripts/install-dev.sh
-source .venv/bin/activate
-```
-
-> **Note:** Run the CLI on your **host machine**, not inside a devcontainer. The login flow starts a local callback server (`localhost:9876`) that must be reachable by your browser. Inside a devcontainer the browser redirect cannot reach the container's localhost.
+> **Note:** Run the CLI on your **host machine**, not inside a devcontainer. The login flow starts a local callback server (`localhost:9876`) that must be reachable by your browser.
 
 ## Quick start
 
@@ -48,20 +42,6 @@ source .venv/bin/activate
    ```
 
    The browser sign-in page supports **Google** (single-step) and **email/password with TOTP MFA**. Use whichever method matches your Olira account.
-
-   For internal / non-production environments (dev builds only):
-
-   ```bash
-   olira login --env dev
-   olira login --env stage
-   ```
-
-   For a fully local setup (Console + MCP running locally):
-
-   ```bash
-   olira login --env local
-   # defaults: Console http://localhost:3000, MCP http://localhost:8084
-   ```
 
 2. **Check status:**
 
@@ -127,6 +107,7 @@ When creating an API key you will be prompted to select one or more scopes:
 | `api:manage-patients` | Create, read, update, and deactivate patient records via REST |
 | `api:org-config` | Read and update organisation platform configuration via REST |
 | `sdk:state-read` | Read patient state — stable data, event modules, summaries, logs, events, memories |
+| `sdk:historical-ingest` | Upload and manage bulk historical data ingestion jobs via the Olira SDK |
 
 ## Credentials
 
@@ -136,30 +117,6 @@ Tokens expire after ~24 hours. Re-run `olira login` to refresh; if you still hav
 
 API keys never expire and are not stored locally — they live in the platform and can be revoked with `olira keys revoke`.
 
-## Environment URLs
-
-| `--env` | Console | MCP Server | API |
-|---------|---------|------------|-----|
-| `local` | http://localhost:3000 | http://localhost:8084 | http://localhost:8080/app-api |
-| `dev` | https://console.dev.olira.ai | https://mcp-patient-state.dev.olira.ai | https://app-api.dev.olira.ai/app-api |
-| `stage` | https://console.stage.olira.ai | https://mcp-patient-state.stage.olira.ai | https://app-api.stage.olira.ai/app-api |
-| `prod` | https://console.olira.ai | https://mcp-patient-state.olira.ai | https://app-api.prod.olira.ai/app-api |
-
-`--env` defaults to `prod` and is an internal flag — it is hidden in public (Homebrew) builds.
-
-## Publishing
-
-See [PUBLISHING.md](PUBLISHING.md) for the full distribution guide — how `olira-cli` is published to CodeArtifact and PyPI, the metapackage setup, the `_INTERNAL_BUILD` flag, and the release checklist.
-
 ## Development
 
-From the package directory (`packages/olira-cli`):
-
-```bash
-bash scripts/install-dev.sh    # set up venv and install dependencies
-bash scripts/lint.sh           # ruff format, ruff check, mypy
-bash scripts/test.sh           # pytest with coverage
-bash scripts/pre-pr.sh         # version check + lint + test
-```
-
-You can also open the package in VS Code (or the devcontainer) and use **Run Task** → `lint`, `test`, or `pre-pr`. Install pre-commit hooks with `pre-commit install` to run checks automatically before each commit.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, validation, and internal build notes.

@@ -11,6 +11,10 @@ echo -e "${BLUE}Running pre-PR validation for olira-cli...${NC}"
 echo "================================================"
 
 echo ""
+echo -e "${BLUE}Step 0: Install dependencies...${NC}"
+bash scripts/uv.sh sync --frozen --extra dev
+
+echo ""
 echo -e "${BLUE}Step 1: Version consistency...${NC}"
 bash scripts/check-version.sh
 

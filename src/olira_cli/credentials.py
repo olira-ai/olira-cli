@@ -58,7 +58,7 @@ def get_token_stdout(quiet: bool = False) -> int:
     creds = load_credentials()
     if not creds or not creds.get("access_token"):
         if not quiet:
-            print("Not logged in. Run: olira login --env <dev|stage|prod>", file=sys.stderr)
+            print("Not logged in. Run: olira login", file=sys.stderr)
         return 1
     token = creds["access_token"]
     expired = _is_token_expired(token)
@@ -92,7 +92,7 @@ def cmd_status() -> int:
     """Print current login and token expiry. Returns 0 if logged in, 1 otherwise."""
     creds = load_credentials()
     if not creds:
-        print("Not logged in. Run: olira login --env <dev|stage|prod>")
+        print("Not logged in. Run: olira login")
         return 1
     identity = creds.get("identity", "unknown")
     organization = creds.get("organization", "unknown")
@@ -144,12 +144,10 @@ def cmd_logout() -> int:
 
     cleaned: list[Path] = []
 
-    # Project-level .cursor/mcp.json (current working directory)
     cwd_mcp = Path.cwd() / ".cursor" / "mcp.json"
     if _clear_mcp_json(cwd_mcp):
         cleaned.append(cwd_mcp)
 
-    # Global ~/.cursor/mcp.json
     home_mcp = Path.home() / ".cursor" / "mcp.json"
     if home_mcp != cwd_mcp and _clear_mcp_json(home_mcp):
         cleaned.append(home_mcp)

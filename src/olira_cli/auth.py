@@ -278,8 +278,6 @@ class _QuietHTTPServer(HTTPServer):
 
 
 class _ConsoleCallbackServer:
-    # Default start port chosen to avoid common conflicts:
-    # - 3000-8999 are common web dev server ports
     _DEFAULT_PORT = 9876
 
     def __init__(self, port: int = _DEFAULT_PORT, timeout: int = 300, console_url: str | None = None):

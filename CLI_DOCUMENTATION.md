@@ -1,6 +1,6 @@
 > **Maintained by:** Olira Engineering  
-> **Published at:** `olira.ai/api-docs` → CLI tab  
-> **Status:** **BETA** — CLI commands and flags may change between releases.
+> **Published at:** [olira.ai/api-docs](https://olira.ai/api-docs) → CLI tab  
+> **Version:** `1.0.0`
 
 # Olira CLI
 
@@ -10,8 +10,6 @@ historical patient data. It is the recommended way to create the API keys consum
 by the [Python SDK](https://olira.ai/api-docs), write your Bearer token into Cursor
 so the [MCP Patient State server](https://olira.ai/api-docs) is available to your AI
 agents, and manage bulk historical data ingestion jobs from the command line.
-
-**Version:** `0.3.5`
 
 
 ## Related docs
@@ -24,33 +22,44 @@ agents, and manage bulk historical data ingestion jobs from the command line.
 
 ## Installation
 
+**macOS / Linux — Homebrew (recommended):**
+
 ```bash
-pip install olira-cli
+brew install olira-ai/tap/olira
 ```
 
-Or with `uv`:
+**macOS / Linux — Shell script:**
 
 ```bash
-uv add olira-cli
+curl -fsSL https://install.olira.ai | sh
+```
+
+**Manual** — download the binary for your platform from [GitHub Releases](https://github.com/olira-ai/olira-cli/releases), make it executable, and move it to your `$PATH`:
+
+```bash
+chmod +x olira-macos-arm64
+mv olira-macos-arm64 /usr/local/bin/olira
 ```
 
 Verify:
 
 ```bash
-olira --help
+olira --version
 ```
+
+> **Note:** Run the CLI on your **host machine**, not inside a devcontainer or remote container. The login flow starts a local callback server (`localhost:9876`) that must be reachable by your browser.
 
 
 ## Quick start
 
 ```bash
-# 1. Log in via browser
+# 1. Log in via browser (Google or email/password + TOTP MFA)
 olira login
 
 # 2. Create an API key
 olira keys create --name "my-integration" --scopes sdk:event-log api:manage-patients
 
-# 3. Configure Cursor (writes ~/.cursor/mcp.json)
+# 3. Configure Cursor (writes .cursor/mcp.json in the current directory, or ~/.cursor/)
 olira configure cursor
 ```
 
@@ -69,16 +78,7 @@ olira ingest upload patients_and_logs.jsonl --watch
 
 ### `olira login`
 
-Log in via browser
-
-**Internal-build flags** (hidden in production `--help`):
-
-| Flag            | Description                               |
-| --------------- | ----------------------------------------- |
-| `--env`         | _(internal build only)_                   |
-| `--mcp-server`  | _(internal build only)_                   |
-| `--console-url` | _(internal build only)_                   |
-| `--port`        | (default: `9876`) _(internal build only)_ |
+Log in via browser. The Console sign-in page supports **Google** (single-step) and **email/password with TOTP MFA** — use whichever method matches your Olira account.
 
 ### `olira token`
 
@@ -297,17 +297,21 @@ scopes non-interactively, or omit `--scopes` to use the interactive picker.
 
 ## Credentials file
 
-Login credentials are stored in `~/.olira/credentials.json`. The file contains:
+Login credentials are stored in `~/.olira/credentials.json` with file permissions `600`. The file contains:
 
 | Field          | Description                               |
 | -------------- | ----------------------------------------- |
-| `access_token` | Short-lived Auth0 JWT used for API calls  |
+| `access_token` | Short-lived JWT used for API calls        |
 | `api_server`   | Base URL for the Olira API                |
 | `mcp_server`   | Base URL for the MCP Patient State server |
+| `identity`     | Display name or email for the logged-in user |
+| `organization` | Organisation name                         |
 | `expires_at`   | ISO 8601 expiry time of the access token  |
 
 The file is created on first login and updated on every subsequent login.
-Tokens expire; re-run `olira login` to refresh.
+Tokens expire after ~24 hours; re-run `olira login` to refresh. If you still have an active browser session with the Console, refresh completes in a few seconds without signing in again.
+
+API keys never expire and are not stored locally — they live in the platform and can be revoked with `olira keys revoke`.
 
 > **Note:** `olira configure cursor` writes your current token directly into
 > `.cursor/mcp.json`. When the token expires, re-run `olira configure cursor`
@@ -358,7 +362,7 @@ olira keys create --name "Cursor" --scopes mcp:patient-state
 
 ```bash
 TOKEN=$(olira token --quiet)
-curl -H "Authorization: Bearer $TOKEN" https://api.prod.olira.ai/member/me
+curl -H "Authorization: Bearer $TOKEN" https://app-api.prod.olira.ai/app-api/member/me
 ```
 
 ### Upload historical data with review

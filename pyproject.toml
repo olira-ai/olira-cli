@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "olira-cli"
-version = "0.4.1"
+version = "1.0.0"
 authors = [
   { name = "Olira AI", email = "dev@olira.ai" },
 ]
@@ -12,7 +12,7 @@ description = "Olira CLI for authentication and MCP client configuration."
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -40,9 +40,10 @@ dev = [
 olira = "olira_cli.cli:main"
 
 [project.urls]
-"Homepage" = "https://github.com/olira-ai/olira-platform"
-"Bug Reports" = "https://github.com/olira-ai/olira-platform/issues"
-"Source" = "https://github.com/olira-ai/olira-platform"
+"Homepage" = "https://github.com/olira-ai/olira-cli"
+"Documentation" = "https://olira.ai/api-docs"
+"Bug Reports" = "https://github.com/olira-ai/olira-cli/issues"
+"Source" = "https://github.com/olira-ai/olira-cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]

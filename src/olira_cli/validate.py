@@ -20,18 +20,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-# ── known event types (mirrors OliraLogType in common-models) ─────────────────
-
 KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
     {
-        # Symptom reports
         "symptom_report",
         "symptom_free_text",
         "symptom_detail",
         "moods_report",
         "functional_class_reported",
         "health_metric_reported",
-        # Lab & clinical
         "lab_results_received",
         "vitals_measurement",
         "clinical_note_received",
@@ -51,24 +47,19 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         "device_reported",
         "memory_report",
         "unstructured_report_received",
-        # Questionnaires
         "questionnaire_response",
         "questionnaire_item_response",
-        # Conversations
         "conversation_completed",
         "conversation_turn_logged",
-        # Passive data
         "heart_rate_data_received",
         "sleep_data_received",
         "activity_data_received",
         "cgm_reading_received",
         "spo2_reading_received",
         "weight_measurement_received",
-        # Medications
         "medication_action",
         "medication_dose_update",
         "medication_adverse_event_reported",
-        # Engagement
         "user_login",
         "user_logout",
         "content_interacted",
@@ -76,7 +67,6 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
         "task_updated",
         "interaction_feedback",
         "feature_used",
-        # Profile
         "demographics_updated",
         "condition_recorded",
         "preferences_updated",
@@ -89,7 +79,6 @@ KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
     }
 )
 
-# PII patterns (mirrors SDK validation.py)
 _RE_EMAIL = re.compile(r"@")
 _RE_PHONE = re.compile(r"^\d{10}$")
 _RE_SSN = re.compile(r"^\d{3}-\d{2}-\d{4}$")
@@ -120,9 +109,6 @@ def _is_pii(patient_id: str) -> str | None:
     return None
 
 
-# ── main entry point ──────────────────────────────────────────────────────────
-
-
 def cmd_validate(args: Any) -> int:
     path = Path(args.file)
     if not path.exists():
@@ -138,17 +124,14 @@ def cmd_validate(args: Any) -> int:
     log_count = 0
     event_type_counts: dict[str, int] = {}
 
-    # Track patient_ids defined in the file (by external_id) so we can warn
-    # when a log references one not yet seen — if --skip-order-check is not set.
     known_patient_ids: set[str] = set()
     skip_order = getattr(args, "skip_order_check", False)
 
-    # Optionally fetch org patients for cross-check
     org_patient_ids: set[str] | None = None
     if getattr(args, "check_org", False):
         org_patient_ids = _fetch_org_patient_ids()
         if org_patient_ids is None:
-            return 1  # error already printed
+            return 1
 
     print(f"Validating {path.name} …")
 
@@ -162,7 +145,6 @@ def cmd_validate(args: Any) -> int:
             if line_count % 50_000 == 0:
                 print(f"  {line_count:,} lines processed…", end="\r", flush=True)
 
-            # JSON parse
             try:
                 rec = json.loads(raw)
             except json.JSONDecodeError as e:
@@ -225,7 +207,6 @@ def cmd_validate(args: Any) -> int:
                     if pii:
                         errors.append(f"L{lineno}: patient_id {pid!r} {pii} — use a pseudonymous identifier")
                     elif not skip_order and not _RE_OBJECT_ID.match(pid):
-                        # external_id reference — check it was declared earlier in the file
                         in_org = org_patient_ids is not None and pid in org_patient_ids
                         if pid not in known_patient_ids and not in_org:
                             warnings.append(
@@ -242,9 +223,8 @@ def cmd_validate(args: Any) -> int:
                         f"L{lineno}: 'timestamp' {ts!r} is not a valid ISO 8601 datetime (e.g. 2025-01-15T09:00:00Z)"
                     )
 
-    # ── Summary ───────────────────────────────────────────────────────────────
     total_lines = patient_count + log_count
-    print("\r" + " " * 40 + "\r", end="")  # clear progress line
+    print("\r" + " " * 40 + "\r", end="")
 
     GREEN = "\033[32m"
     YELLOW = "\033[33m"
@@ -299,7 +279,7 @@ def _fetch_org_patient_ids() -> set[str] | None:
 
     creds = load_credentials()
     if not creds or not creds.get("access_token"):
-        print("Not logged in. Run: olira login --env <dev|stage|prod>", file=sys.stderr)
+        print("Not logged in. Run: olira login", file=sys.stderr)
         return None
 
     api_base = creds["api_server"].rstrip("/")
@@ -323,7 +303,6 @@ def _fetch_org_patient_ids() -> set[str] | None:
                     for ext in p.get("external_identifiers") or []:
                         if ext.get("value"):
                             ids.add(str(ext["value"]))
-                    # Also accept Olira UUID direct reference
                     if p.get("id"):
                         ids.add(str(p["id"]))
                 total = data.get("total", 0)

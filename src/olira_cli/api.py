@@ -1,4 +1,4 @@
-"""HTTP calls to app-api (keys CRUD) and MCP (validation)."""
+"""HTTP calls to the Olira API (keys CRUD) and MCP (validation)."""
 
 import pathlib
 import sys
@@ -6,7 +6,6 @@ from typing import Any
 
 from olira_cli.credentials import load_credentials
 
-# Canonical scope definitions — mirrors ApiKeyScope in common-models and api-keys.ts in the console.
 VALID_SCOPES: dict[str, str] = {
     "mcp:patient-state": "Query patient state via the MCP Patient State server",
     "mcp:integration": "Olira Integration MCP (coming soon)",
@@ -23,7 +22,7 @@ _DEFAULT_SCOPE = "mcp:patient-state"
 def _require_creds() -> dict[str, Any] | None:
     creds = load_credentials()
     if not creds or not creds.get("access_token"):
-        print("Not logged in. Run: olira login --env <dev|stage|prod>", file=sys.stderr)
+        print("Not logged in. Run: olira login", file=sys.stderr)
         return None
     return creds
 
@@ -96,7 +95,6 @@ def _keys_create(name: str | None = None, scopes: list[str] | None = None) -> in
             return 1
 
     if scopes is not None:
-        # Non-interactive: validate the provided scopes client-side before hitting the API.
         invalid = [s for s in scopes if s not in VALID_SCOPES]
         if invalid:
             print(f"Error: Unknown scope(s): {invalid}", file=sys.stderr)
@@ -106,7 +104,6 @@ def _keys_create(name: str | None = None, scopes: list[str] | None = None) -> in
             print("Error: At least one scope must be provided.", file=sys.stderr)
             return 1
     else:
-        # Interactive: show the checkbox picker.
         selected = _prompt_scopes()
         if selected is None:
             return 1
@@ -230,7 +227,7 @@ def _keys_revoke(key_ref: str) -> int:
 
 
 def fetch_member_profile(api_base: str, token: str) -> dict[str, str]:
-    """Fetch member profile from app-api.
+    """Fetch member profile from the Olira API.
 
     Calls GET /member/me and GET /organization/me with the given JWT.
     Returns a dict with keys: email, first_name, last_name, org_name.

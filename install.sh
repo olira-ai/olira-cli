@@ -6,7 +6,7 @@
 
 set -e
 
-REPO="olira-ai/olira-platform"
+REPO="olira-ai/olira-cli"
 BINARY="olira"
 INSTALL_DIR="/usr/local/bin"
 

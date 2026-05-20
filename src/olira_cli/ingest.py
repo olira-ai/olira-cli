@@ -18,11 +18,9 @@ import httpx
 
 from olira_cli.credentials import load_credentials
 
-# ── helpers ────────────────────────────────────────────────────────────────────
-
 _TERMINAL = {"completed", "completed_with_errors", "cancelled", "failed"}
 _ACTIVE = {"queued", "validating", "inserting_patients", "inserting_logs", "confirmed", "replaying", "backfilling"}
-_PHASE2 = {"confirmed", "replaying", "backfilling"}  # slow-poll territory
+_PHASE2 = {"confirmed", "replaying", "backfilling"}
 
 _STATUS_LABELS: dict[str, str] = {
     "queued": "Queued",
@@ -91,9 +89,6 @@ def _fetch_job(client: httpx.Client, api_base: str, token: str, job_id: str) -> 
     return r.json()
 
 
-# ── upload ─────────────────────────────────────────────────────────────────────
-
-
 def cmd_upload(args: Any) -> int:
     """Upload a JSONL file and create an ingestion job."""
     import pathlib
@@ -120,7 +115,6 @@ def cmd_upload(args: Any) -> int:
 
     try:
         with httpx.Client(timeout=30) as client:
-            # 1. Get presigned URL
             r = client.post(
                 f"{api_base}/v1/ingestion/upload-url",
                 headers=_headers(token),
@@ -139,7 +133,6 @@ def cmd_upload(args: Any) -> int:
                 )
                 return 1
 
-            # 2. PUT to S3
             print("  Uploading to S3…")
             with open(path, "rb") as f:
                 s3r = httpx.put(upload_url, content=f.read(), timeout=120)
@@ -147,7 +140,6 @@ def cmd_upload(args: Any) -> int:
                 print(f"Error: S3 upload failed ({s3r.status_code}).", file=sys.stderr)
                 return 1
 
-            # 3. Create job
             print("  Creating ingestion job…")
             body: dict[str, Any] = {
                 "s3_key": s3_key,
@@ -185,9 +177,6 @@ def cmd_upload(args: Any) -> int:
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-
-
-# ── list ───────────────────────────────────────────────────────────────────────
 
 
 def cmd_list(args: Any) -> int:
@@ -230,7 +219,7 @@ def cmd_list(args: Any) -> int:
         for j in jobs:
             _print_job_row(j)
 
-        pages = max(1, -(-total // page_size))  # ceiling division
+        pages = max(1, -(-total // page_size))
         print(f"\n  Page {page}/{pages} · {total} total job(s)")
         if page < pages:
             print(f"  Next page: olira ingest list --page {page + 1}")
@@ -242,9 +231,6 @@ def cmd_list(args: Any) -> int:
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-
-
-# ── status ─────────────────────────────────────────────────────────────────────
 
 
 def cmd_status(args: Any) -> int:
@@ -272,9 +258,6 @@ def cmd_status(args: Any) -> int:
         return 1
 
 
-# ── confirm ────────────────────────────────────────────────────────────────────
-
-
 def cmd_confirm(args: Any) -> int:
     """Confirm a job at AWAITING_CONFIRMATION to start Phase 2."""
     creds = _require_creds()
@@ -286,7 +269,6 @@ def cmd_confirm(args: Any) -> int:
 
     try:
         with httpx.Client(timeout=30) as client:
-            # Optionally update summary_types / skip_backfill before confirming
             patch: dict[str, Any] = {}
             if args.summary_types:
                 patch["summary_types"] = args.summary_types
@@ -321,9 +303,6 @@ def cmd_confirm(args: Any) -> int:
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-
-
-# ── cancel ─────────────────────────────────────────────────────────────────────
 
 
 def cmd_cancel(args: Any) -> int:
@@ -361,9 +340,6 @@ def cmd_cancel(args: Any) -> int:
         return 1
 
 
-# ── retry-backfill ─────────────────────────────────────────────────────────────
-
-
 def cmd_retry_backfill(args: Any) -> int:
     """Retry view backfill on a COMPLETED_WITH_ERRORS job."""
     creds = _require_creds()
@@ -392,9 +368,6 @@ def cmd_retry_backfill(args: Any) -> int:
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
-
-
-# ── shared: watch ──────────────────────────────────────────────────────────────
 
 
 def _watch_job(api_base: str, token: str, job_id: str) -> int:
@@ -451,17 +424,12 @@ def _watch_job(api_base: str, token: str, job_id: str) -> int:
                     _print_job_detail(job)
                     return 0 if status in {"completed", "completed_with_errors"} else 1
 
-                # Phase 2 (replay + backfill) runs sequentially per patient and can take
-                # hours — poll slowly to avoid unnecessary requests.
                 interval = 30.0 if status in _PHASE2 else 5.0
                 time.sleep(interval)
 
     except KeyboardInterrupt:
         print("\n  Watch stopped (job is still running).")
         return 0
-
-
-# ── shared: detail ─────────────────────────────────────────────────────────────
 
 
 def _print_job_detail(job: dict[str, Any]) -> None:
