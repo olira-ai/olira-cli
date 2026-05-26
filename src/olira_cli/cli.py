@@ -115,6 +115,12 @@ def main() -> int:
         action="store_true",
         help="Tail job progress until terminal or AWAITING_CONFIRMATION",
     )
+    ingest_upload.add_argument(
+        "--init-templates",
+        action="store_true",
+        dest="init_templates",
+        help="At AWAITING_CONFIRMATION, initialize missing view template slots and confirm (non-interactive)",
+    )
 
     ingest_list = ingest_sub.add_parser("list", help="List ingestion jobs for the org")
     ingest_list.add_argument("--page", type=int, default=1, help="Page number (default: 1)")
@@ -151,6 +157,12 @@ def main() -> int:
         "--watch",
         action="store_true",
         help="Tail progress after confirmation",
+    )
+    ingest_confirm.add_argument(
+        "--init-templates",
+        action="store_true",
+        dest="init_templates",
+        help="Initialize missing view template slots before confirming (non-interactive)",
     )
 
     ingest_cancel = ingest_sub.add_parser("cancel", help="Cancel an ingestion job")

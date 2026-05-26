@@ -1,6 +1,6 @@
 > **Maintained by:** Olira Engineering  
 > **Published at:** [olira.ai/api-docs](https://olira.ai/api-docs) → CLI tab  
-> **Version:** `1.0.0`
+> **Version:** `1.1.0`
 
 # Olira CLI
 
@@ -171,6 +171,25 @@ olira validate data.jsonl --skip-order-check   # skip the patient-before-log ord
 Upload and manage historical data ingestion jobs. All subcommands require a
 key with `sdk:historical-ingest` scope (or an active console session).
 
+#### Missing view template slots
+
+Some patients may not have view slots for every template configured on your org
+(for example, if `recent_highlights` was added after the patient was first created).
+When that happens, the job reaches `AWAITING_CONFIRMATION` with **Warnings** in the
+job detail (code `missing_template_slot`), separate from hard **Errors**.
+
+If warnings are present and your terminal is interactive, `upload --watch`,
+`status`, and `confirm` offer a choice:
+
+1. **Initialize missing templates and continue** (recommended) — confirms with
+   `initialize_missing_templates=true` so the API creates the missing slots before Phase 2.
+2. **Skip view generation** — sets `skip_backfill` and confirms (replay only; views later via `retry-backfill`).
+3. **Proceed anyway** — confirms normally; backfill may fail for affected patients.
+4. **Cancel job**
+
+For scripts and CI, pass `--init-templates` on `upload` or `confirm` instead of the prompt.
+Without a TTY, `confirm` prints hints and exits unless you pass `--init-templates` or `--no-backfill`.
+
 #### `olira ingest upload`
 
 Upload a `.jsonl` file to S3 and create an ingestion job. By default the job
@@ -184,6 +203,7 @@ olira ingest upload data.jsonl --no-confirm
 olira ingest upload data.jsonl --watch
 olira ingest upload data.jsonl --summary-types emotional_state_snapshot clinical_note
 olira ingest upload data.jsonl --idempotency-key my-unique-key-2026
+olira ingest upload data.jsonl --watch --init-templates
 ```
 
 | Flag                | Description                                                                              |
@@ -193,7 +213,8 @@ olira ingest upload data.jsonl --idempotency-key my-unique-key-2026
 | `--no-backfill`     | Skip Stage 5 (AI view generation) after graph replay. Data is fully imported and queryable but Console views are not populated. |
 | `--summary-types`   | view types to generate (space-separated, e.g. `emotional_state_snapshot`)         |
 | `--idempotency-key` | Unique key for this upload. Resubmitting the same key while a job is active returns the existing job instead of creating a new one. Auto-generated if omitted. |
-| `--watch`           | Tail progress after upload until the job reaches `AWAITING_CONFIRMATION` or a terminal status |
+| `--watch`           | Tail progress after upload until the job reaches `AWAITING_CONFIRMATION` or a terminal status. At `AWAITING_CONFIRMATION`, shows job detail and may prompt if missing template slots are detected. |
+| `--init-templates`  | At `AWAITING_CONFIRMATION`, initialize missing view slots and confirm automatically (non-interactive; no prompt). |
 
 #### `olira ingest list`
 
@@ -213,12 +234,17 @@ olira ingest list --page-size 20
 
 #### `olira ingest status`
 
-Show the current status and detail for a single job.
+Show the current status and detail for a single job. Job detail lists **Warnings**
+(`missing_template_slot`) separately from **Errors** when applicable.
 
 ```bash
 olira ingest status <job_id>
 olira ingest status <job_id> --watch
 ```
+
+When the job is `AWAITING_CONFIRMATION` and missing template slot warnings are present,
+`status` (without `--watch`) prints the detail and may offer the interactive confirm
+choices described above.
 
 | Flag      | Description                                                              |
 | --------- | ------------------------------------------------------------------------ |
@@ -232,14 +258,20 @@ Confirm a job at `AWAITING_CONFIRMATION` to start Phase 2 (graph replay + view b
 ```bash
 olira ingest confirm <job_id>
 olira ingest confirm <job_id> --summary-types emotional_state_snapshot
-olira ingest confirm <job_id> --watch
+olira ingest confirm <job_id> --init-templates
+olira ingest confirm <job_id> --no-backfill --watch
 ```
+
+When missing template slot warnings are present and stdin is a TTY, `confirm` shows
+the interactive choices before calling the API. Use `--init-templates` or `--no-backfill`
+to skip the prompt.
 
 | Flag              | Description                                                  |
 | ----------------- | ------------------------------------------------------------ |
 | `job_id`          | The job ID to confirm                                        |
 | `--summary-types` | Set view types before confirming (space-separated)     |
 | `--no-backfill`   | Skip Stage 5 (AI view generation) before confirming          |
+| `--init-templates` | Initialize missing view template slots on affected patients, then confirm (non-interactive). Requires app-api with missing-slot support. |
 | `--watch`         | Tail progress after confirming until the job reaches terminal |
 
 #### `olira ingest cancel`
@@ -377,8 +409,12 @@ olira validate patients_and_logs.jsonl
 # 3. Upload — job pauses at AWAITING_CONFIRMATION
 olira ingest upload patients_and_logs.jsonl --watch
 
-# 4. Review the summary, then confirm to start AI processing
+# 4. Review the summary (Warnings vs Errors), then confirm to start AI processing
 olira ingest confirm <job_id> --summary-types emotional_state_snapshot --watch
+
+# If you see missing_template_slot warnings, either use the interactive prompt
+# or confirm non-interactively:
+olira ingest confirm <job_id> --init-templates --watch
 ```
 
 ### Upload without a review step
@@ -392,6 +428,10 @@ olira ingest upload patients_and_logs.jsonl --no-confirm --watch
 ```bash
 olira ingest status <job_id>
 ```
+
+Warnings for missing view template slots appear under **Warnings**, not **Errors**.
+Use `olira ingest confirm <job_id> --init-templates` to fix slots and proceed without
+the interactive prompt.
 
 ### Cancel a job mid-flight
 
