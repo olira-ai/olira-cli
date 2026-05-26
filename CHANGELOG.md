@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-05-26
+
+### Added
+
+- Interactive prompt at `AWAITING_CONFIRMATION` when patients are missing view template slots: initialize templates, skip backfill, proceed anyway, or cancel.
+- `--init-templates` on `olira ingest upload` and `olira ingest confirm` for non-interactive confirm with `initialize_missing_templates=true`.
+- `olira ingest status` (and `--watch`) now shows "Cancellation requested…" when `cancel_requested` is true and the job is still actively processing, matching the Console badge.
+
+### Changed
+
+- `olira ingest status`, `upload --watch`, and `confirm` surface `missing_template_slot` entries under **Warnings** (separate from **Errors**) when printing job detail.
+
 ## [1.0.4] - 2026-05-21
 
 ### Added
