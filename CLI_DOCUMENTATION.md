@@ -103,7 +103,7 @@ Create a new API key
 | Flag       | Description                                                                                                                                                                                                                               |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--name`   | Key name (skips the interactive prompt).                                                                                                                                                                                                  |
-| `--scopes` | Scopes to grant (space-separated). Skips the interactive picker. Valid: `mcp:patient-state`, `mcp:integration`, `sdk:event-log`, `sdk:patient-token`, `api:manage-patients`, `api:org-config`, `sdk:state-read`, `sdk:historical-ingest`. |
+| `--scopes` | Scopes to grant (space-separated). Skips the interactive picker. Valid: `mcp:patient-state`, `sdk:event-log`, `sdk:patient-token`, `api:manage-patients`, `api:org-config`, `sdk:state-read`, `sdk:historical-ingest`, `sdk:integrations`, `sdk:integration-write`, `api:manage-projects`. |
 
 ### `olira keys list`
 
@@ -310,13 +310,15 @@ Each scope grants access to one set of Olira endpoints.
 | Scope                   | Description                                                                        |
 | ----------------------- | ---------------------------------------------------------------------------------- |
 | `mcp:patient-state`     | Query patient state via the MCP Patient State server                               |
-| `mcp:integration`       | Olira Integration MCP (coming soon)                                                |
 | `sdk:event-log`         | Log health events on behalf of patients via the Olira SDK                          |
 | `sdk:patient-token`     | Mint short-lived, patient-locked JWTs for SDK use                                  |
 | `api:manage-patients`   | Create, read, update, and deactivate patient records via REST                      |
 | `api:org-config`        | Read and update organisation platform configuration via REST                       |
 | `sdk:state-read`        | Read patient state — stable data, event modules, summaries, logs, events, memories |
 | `sdk:historical-ingest` | Upload and manage bulk historical data ingestion jobs                              |
+| `sdk:integrations`      | Manage EHR integrations — catalog, connect/disconnect, data-point subscriptions, sync status (control-plane only, no write-back) |
+| `sdk:integration-write` | Honor the `write_back` flag on logged events for EHR write-back                   |
+| `api:manage-projects`   | Create, list, rename, and deprecate projects; requires an org-wide key            |
 
 Use `olira keys create --scopes mcp:patient-state sdk:event-log ...` to grant specific
 scopes non-interactively, or omit `--scopes` to use the interactive picker.

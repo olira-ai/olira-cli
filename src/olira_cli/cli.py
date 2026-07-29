@@ -47,9 +47,9 @@ def main() -> int:
         metavar="SCOPE",
         help=(
             "Scopes to grant (space-separated). Skips the interactive picker. "
-            "Valid: mcp:patient-state, mcp:integration, sdk:event-log, "
-            "sdk:patient-token, api:manage-patients, api:org-config, sdk:state-read, "
-            "sdk:historical-ingest."
+            "Valid: mcp:patient-state, sdk:event-log, sdk:patient-token, "
+            "api:manage-patients, api:org-config, sdk:state-read, sdk:historical-ingest, "
+            "sdk:integrations, sdk:integration-write, api:manage-projects."
         ),
     )
     keys_sub.add_parser("list", help="List API keys for your organization")
