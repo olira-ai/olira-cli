@@ -2,7 +2,7 @@
 
 Command-line tool for authenticating with Olira and configuring MCP (Model Context Protocol) access for tools like Cursor.
 
-Full command reference: [docs.olira.ai](https://docs.olira.ai)
+Full command reference: [docs.olira.ai/cli](https://docs.olira.ai/cli)
 
 ## Installation
 

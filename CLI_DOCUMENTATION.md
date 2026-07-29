@@ -1,6 +1,6 @@
 > **Maintained by:** Olira Engineering  
 > **Published at:** [docs.olira.ai](https://docs.olira.ai) → CLI tab  
-> **Version:** `1.0.0`
+> **Version:** `1.1.1`
 
 # Olira CLI
 
