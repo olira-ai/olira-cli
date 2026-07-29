@@ -8,13 +8,15 @@ from olira_cli.credentials import load_credentials
 
 VALID_SCOPES: dict[str, str] = {
     "mcp:patient-state": "Query patient state via the MCP Patient State server",
-    "mcp:integration": "Olira Integration MCP (coming soon)",
     "sdk:event-log": "Log health events on behalf of patients via the Olira SDK",
     "sdk:patient-token": "Mint short-lived, patient-locked JWTs for SDK use",
     "api:manage-patients": "Create, read, update, and deactivate patient records via REST",
     "api:org-config": "Read and update organisation platform configuration via REST",
     "sdk:state-read": "Read patient state — stable data, event modules, summaries, logs, events, memories",
     "sdk:historical-ingest": "Upload and manage bulk historical data ingestion jobs via the Olira SDK",
+    "sdk:integrations": "Manage integrations — catalog, connect/disconnect, data-point subscriptions, sync status",
+    "sdk:integration-write": "Honor the write_back flag on logged events for EHR write-back",
+    "api:manage-projects": "Create, list, rename, and deprecate projects; requires an org-wide key",
 }
 _DEFAULT_SCOPE = "mcp:patient-state"
 
