@@ -439,7 +439,7 @@ wheels = [
 
 [[package]]
 name = "olira-cli"
-version = "1.1.0"
+version = "1.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
