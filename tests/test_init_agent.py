@@ -75,19 +75,3 @@ def test_init_agent_skills_are_independently_focused(run_cli, tmp_path):
     assert "name: olira-setup" in setup
     assert "keys create" in setup
     assert "AWAITING_CONFIRMATION".lower() not in setup.lower()
-
-
-def test_init_agent_removes_legacy_monolithic_skill(run_cli, tmp_path):
-    """Upgrading from the old single-skill layout shouldn't leave a stale file behind."""
-    legacy_claude = tmp_path / ".claude" / "skills" / "olira" / "SKILL.md"
-    legacy_claude.parent.mkdir(parents=True)
-    legacy_claude.write_text("old monolithic skill")
-    legacy_cursor = tmp_path / ".cursor" / "rules" / "olira.mdc"
-    legacy_cursor.parent.mkdir(parents=True)
-    legacy_cursor.write_text("old monolithic rule")
-
-    run_cli(["--json", "init", "agent", "--dir", str(tmp_path)])
-
-    assert not legacy_claude.exists()
-    assert not legacy_claude.parent.exists()  # the now-empty "olira" skill dir is cleaned up too
-    assert not legacy_cursor.exists()

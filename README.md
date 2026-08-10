@@ -141,8 +141,7 @@ because the ingestion state machine is genuinely complex and a "list
 patients" task shouldn't have to load it: each skill covers only its own
 commands (auth, exit codes, and the JSON envelope — needed by everything —
 live once in `AGENTS.md`, which most agents load unconditionally). Safe to
-re-run; it updates in place rather than duplicating content, and cleans up
-the old single-skill layout if it finds one from an earlier CLI version.
+re-run; it updates in place rather than duplicating content.
 
 **Connect your agent directly to the Olira MCP server** (so it can query
 patient state as a tool, not by shelling out to the CLI):

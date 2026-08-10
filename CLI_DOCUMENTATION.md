@@ -218,9 +218,7 @@ credential-class split, the JSON envelope, the full exit-code table — lives
 once in the `AGENTS.md` digest, which most agents load unconditionally;
 skills reference it rather than repeat it. Idempotent: re-running updates
 `AGENTS.md`'s managed block and overwrites the skill/rule files only if
-their content changed; never prompts. Upgrading from an older CLI version
-that wrote the single monolithic skill/rule cleans that file up
-automatically.
+their content changed; never prompts.
 
 ```bash
 olira init agent

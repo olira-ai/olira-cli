@@ -27,13 +27,6 @@ from olira_cli.errors import CliError, CommandResult
 _MARKER_BEGIN = "<!-- BEGIN olira-cli (managed by 'olira init agent', v{version}) -->"
 _MARKER_END = "<!-- END olira-cli -->"
 
-# Paths superseded by the per-process split — removed on write so upgrading
-# doesn't leave a stale monolithic skill alongside the new ones.
-_LEGACY_PATHS = (
-    ("claude", ("skills", "olira")),
-    ("cursor", ("rules", "olira.mdc")),
-)
-
 _EXIT_CODE_TABLE = """\
 | Code | Meaning |
 |---|---|
@@ -419,28 +412,6 @@ def write_marker_block(path: Path, block: str, *, begin_prefix: str, end_marker:
     return "updated"
 
 
-def _remove_legacy_monolith(directory: Path, client: str) -> dict[str, str] | None:
-    """Delete the single-skill artifact a pre-split `olira init agent` wrote, if present.
-
-    Only for `claude` (a directory: `.claude/skills/olira/`) and `cursor` (a
-    single file: `.cursor/rules/olira.mdc`) — AGENTS.md has nothing legacy
-    to remove since its managed block is rewritten in place either way.
-    """
-    import shutil
-
-    for legacy_client, parts in _LEGACY_PATHS:
-        if legacy_client != client:
-            continue
-        target = directory / f".{legacy_client}" / Path(*parts)
-        if legacy_client == "claude" and target.is_dir():
-            shutil.rmtree(target)
-            return {"path": str(target), "action": "removed (superseded by per-process skills)"}
-        if legacy_client == "cursor" and target.is_file():
-            target.unlink()
-            return {"path": str(target), "action": "removed (superseded by per-process rules)"}
-    return None
-
-
 def write_agent_docs(directory: Path, *, claude: bool, cursor: bool, codex: bool) -> list[dict[str, str]]:
     """AGENTS.md is always written — it's the shared foundation every client (including Codex,
     which reads it natively, no special format) needs regardless of which flags are passed.
@@ -458,9 +429,6 @@ def write_agent_docs(directory: Path, *, claude: bool, cursor: bool, codex: bool
     files.append({"path": str(path), "action": action})
 
     if claude:
-        legacy = _remove_legacy_monolith(directory, "claude")
-        if legacy:
-            files.append(legacy)
         for slug, builder in (
             ("olira-ingest", _skill_md_ingest),
             ("olira-query", _skill_md_query),
@@ -471,9 +439,6 @@ def write_agent_docs(directory: Path, *, claude: bool, cursor: bool, codex: bool
             files.append({"path": str(path), "action": action})
 
     if cursor:
-        legacy = _remove_legacy_monolith(directory, "cursor")
-        if legacy:
-            files.append(legacy)
         for slug, builder in (
             ("olira-ingest", _cursor_mdc_ingest),
             ("olira-query", _cursor_mdc_query),
