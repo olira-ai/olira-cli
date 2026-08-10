@@ -107,6 +107,7 @@ def test_configure_codex_replaces_block_from_older_cli_version(run_cli, no_creds
     assert content.count("[mcp_servers.olira-patient-state]") == 1
     assert "OLD_ENV_VAR" not in content
     assert "v0.9.0" not in content
+    assert "old.example.com" not in content
 
 
 def test_init_agent_codex_only_writes_agents_md(run_cli, tmp_path):

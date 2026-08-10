@@ -47,8 +47,10 @@ def test_500_maps_to_network_error(run_cli, creds_file, monkeypatch):
 def test_revoke_rejects_ambiguous_key_name(run_cli, creds_file):
     """Two keys sharing a name must not silently revoke whichever the server listed first."""
     creds_file()
+    methods_seen = []
 
     def _h(request: httpx.Request) -> httpx.Response:
+        methods_seen.append(request.method)
         return httpx.Response(
             200,
             json={
@@ -66,6 +68,7 @@ def test_revoke_rejects_ambiguous_key_name(run_cli, creds_file):
     assert env["error"]["code"] == "AMBIGUOUS_KEY"
     assert "key-1" in env["error"]["remediation"]
     assert "key-2" in env["error"]["remediation"]
+    assert "DELETE" not in methods_seen
 
 
 def test_revoke_never_tracebacks_on_http_error(run_cli, creds_file):
