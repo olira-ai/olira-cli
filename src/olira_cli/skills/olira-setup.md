@@ -12,6 +12,11 @@ Installed as `olira` (verify with `olira --version`; this doc matches v{{VERSION
 - **API key** (`OLIRA_API_KEY=olira_...`) — required by `olira ingest *`, `olira validate --check-org`, and every read-only query command (`patients`/`state`/`cohorts`/`projects`/`integrations`/`log-types`). A browser login is rejected for these.
 - **Browser login** (`olira login`) — required by `olira keys *` and `olira configure cursor`. An API key is rejected for these. Never run `olira login` yourself; it opens a real browser and refuses to run headlessly. Ask the human to run it, or to hand you an API key instead.
 
+**API keys never expire.** `olira status` reports the browser login
+credential only — `expired: true` in its output means the human's login
+lapsed, and has no effect on `OLIRA_API_KEY`. Do not conclude an API key is
+expired from `olira status`.
+
 ## Scopes
 
 Grant only what a key needs — least privilege, one scope per capability:

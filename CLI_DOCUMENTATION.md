@@ -107,11 +107,11 @@ an opaque 401 from the server.
 ### JSON envelope
 
 ```json
-{"ok": true, "command": "ingest.status", "cli_version": "1.2.0", "data": {"job_id": "...", "status": "replaying", "...": "..."}, "warnings": []}
+{"ok": true, "command": "ingest.status", "cli_version": "1.3.0", "data": {"job": {"job_id": "...", "status": "replaying", "...": "..."}}, "warnings": []}
 ```
 
 ```json
-{"ok": false, "command": "keys.revoke", "cli_version": "1.2.0",
+{"ok": false, "command": "keys.revoke", "cli_version": "1.3.0",
  "error": {"code": "PROMPT_REQUIRED", "message": "Revoking a key requires an interactive terminal.",
            "remediation": "Re-run with --yes.", "http_status": null, "details": {}}}
 ```

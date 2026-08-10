@@ -45,12 +45,12 @@ never run it yourself.
 
 ```python
 import os
-from olira import OliraClient, OliraEnv
+from olira import OliraClient
 
-client = OliraClient(
-    api_key=os.environ["OLIRA_API_KEY"],
-    environment=OliraEnv.PRODUCTION,     # OliraEnv.DEVELOPMENT for non-prod systems
-)
+client = OliraClient(api_key=os.environ["OLIRA_API_KEY"])
+# Multi-project orgs: add project="<id-or-slug>" to target a specific
+# workspace (e.g. a dev project while testing). A project-locked key
+# needs no project param. Logs always inherit the patient's project.
 
 # patient_id must be the OLIRA-ASSIGNED id, not your system's identifier.
 # Resolve yours first (see "Patient ids" below), or hardcode a known one.
@@ -86,7 +86,8 @@ olira state logs <patient_id> --event-types <subtype> --limit 5 --json
 - `log()` also accepts `metadata=` (unvalidated, see shaping rules) and
   `trace=` (an `OliraTrace` linking the event to a source object).
 - **Bursts:** `client.log_batch([LogSpec(log_type=..., patient_id=..., payload=..., idempotency_key=...), ...])`
-  sends one synchronous request and returns `BatchResult(accepted, failed, errors)`.
+  (`from olira import LogSpec`) sends one synchronous request and returns
+  `BatchResult(accepted, failed, errors)`.
   Always check `failed` and `errors` — partial failures are reported per item.
   `idempotency_key` (dedup on retry) exists on `LogSpec` only; `log()` does not take it.
 - **Already-FHIR sources:** `client.log_fhir(patient_id=..., resource=...)`

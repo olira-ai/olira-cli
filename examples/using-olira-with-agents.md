@@ -20,7 +20,7 @@ yourself once, then create a long-lived API key for the agent to use:
 
 ```bash
 olira login
-olira keys create --name "my-agent" --scopes sdk:historical-ingest api:manage-patients sdk:state-read sdk:integrations
+olira keys create --name "my-agent" --scopes sdk:historical-ingest sdk:event-log api:manage-patients sdk:state-read sdk:integrations
 ```
 
 Grant only the scopes your agent actually needs — see

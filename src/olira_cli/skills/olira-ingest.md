@@ -22,7 +22,7 @@ is rejected. Multi-project orgs: `--project <id-or-slug>` (or
 
 - Always pass a SHORT `--timeout` with `--watch` (60 to 120 seconds). The timeout bounds how long this one call blocks. It is not a guess at the job's real duration — jobs can legitimately run for hours.
 - Exit `8` (`WATCH_TIMEOUT`) means the job is STILL RUNNING, not failed. Report progress now; check again later with `olira ingest status <job_id> --json` (no `--watch`). Never retry with a bigger timeout.
-- Check `data.status` on every job response. `completed_with_errors` exits 0 but is a partial success — inspect `data.error_summary`.
+- Check `data.job.status` on every job response (`status`/watch responses nest the job under `data.job`). `completed_with_errors` exits 0 but is a partial success — inspect `data.job.error_summary`.
 
 ## Ingestion job state machine
 
@@ -88,18 +88,19 @@ Before reporting the ingestion finished, confirm every item:
 
 - [ ] `olira validate` exited 0 on the final version of the file.
 - [ ] The job reached `completed` or `completed_with_errors` (from a `status` call, not assumed).
-- [ ] If `completed_with_errors`: `data.error_summary` inspected and reported to the user.
+- [ ] If `completed_with_errors`: `data.job.error_summary` inspected and reported to the user.
 - [ ] If the watch timed out: the job id and last-known progress were reported — a running job is not a finished task.
 
 ## Failure playbook
 
 | Exit code | Likely cause | Next command |
 |---|---|---|
-| 3 (`AUTH_REQUIRED`) | `OLIRA_API_KEY` unset, or a browser-login-only credential used for an SDK command | Ask the human to run `olira keys create --scopes sdk:historical-ingest`, then `export OLIRA_API_KEY=...` |
+| 3 (`AUTH_REQUIRED`) | `OLIRA_API_KEY` unset, or a browser-login-only credential used for an SDK command | Ask the human to run `olira keys create --scopes sdk:historical-ingest`, then `export OLIRA_API_KEY=...`. API keys never expire — `olira status` reports the browser login only, so `expired: true` there does NOT mean your key is bad |
+| 429 "already has N active ingestion jobs" | Your own earlier upload is still active (or stuck) | Do NOT re-upload — that creates duplicate jobs. Run `olira ingest list --json`, find your earlier job, and drive THAT one (`status`/`confirm`). Cancel it only if it is genuinely stuck and you created it |
 | 5 (`VALIDATION_FAILED`) | `olira validate` found errors | Read `error.details.errors`, fix the file, re-run `olira validate` |
 | 6 (`PROMPT_REQUIRED`) | A command would have prompted interactively | Read `error.remediation` — it names the exact flag to add |
 | 6 (`CONFIRMATION_REQUIRED`) | Job at `awaiting_confirmation` has missing template slots | `olira ingest confirm <job_id> --init-templates` |
 | 6 (`JOB_FAILED` / `JOB_CANCELLED`) | Watched job ended non-successfully | `olira ingest status <job_id> --json` for `error_summary` |
 | 7 (`NETWORK_ERROR` / `SERVER_ERROR`) | Transient network/5xx | Retry; the watch loop already retries transient errors automatically |
 | 8 (`WATCH_TIMEOUT`) | `--timeout` exceeded — normal for a long-running job, NOT a failure | Report the job id and its last-known progress to the user now; check `olira ingest status <job_id> --json` again in a later turn. Do not just retry with a bigger `--timeout` — a bulk historical job can legitimately run for hours, and blocking a turn on it wastes it. |
-| any, on `completed_with_errors` | Partial success | Inspect `data.error_summary`; consider `olira ingest retry-backfill <job_id>` |
+| any, on `completed_with_errors` | Partial success | Inspect `data.job.error_summary`; consider `olira ingest retry-backfill <job_id>` |
