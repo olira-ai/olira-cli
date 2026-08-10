@@ -29,8 +29,15 @@ olira validate "$DATA_FILE" --json | jq .
 
 echo
 echo "==> Uploading (--watch --timeout 90 bounds how long this call blocks, not the job's real duration)"
+set +e
 UPLOAD=$(olira ingest upload "$DATA_FILE" --json --watch --timeout 90)
+UPLOAD_STATUS=$?
+set -e
 echo "$UPLOAD" | jq .
+if [ "$UPLOAD_STATUS" -ne 0 ] && [ "$UPLOAD_STATUS" -ne 8 ]; then
+    echo "==> Upload failed (exit $UPLOAD_STATUS) — see error above" >&2
+    exit "$UPLOAD_STATUS"
+fi
 JOB_ID=$(echo "$UPLOAD" | tail -1 | jq -r '.data.job.job_id // .data.job_id // empty')
 
 if [ -z "$JOB_ID" ]; then
@@ -48,7 +55,12 @@ if [ "$STATUS" = "awaiting_confirmation" ]; then
     # (see using-olira-with-agents.md). If it times out (exit 8), that's not
     # a failure — this is the "check back later" fallback the docs describe,
     # not a naive retry with an ever-bigger timeout.
-    if ! olira ingest confirm "$JOB_ID" --init-templates --json --watch --timeout 90 | jq .; then
+    set +e
+    CONFIRM=$(olira ingest confirm "$JOB_ID" --init-templates --json --watch --timeout 90)
+    CONFIRM_STATUS=$?
+    set -e
+    echo "$CONFIRM" | jq .
+    if [ "$CONFIRM_STATUS" -eq 8 ]; then
         echo "==> Still running past the watch window — polling status instead of blocking further"
         for _ in $(seq 1 30); do
             sleep 10
@@ -58,6 +70,9 @@ if [ "$STATUS" = "awaiting_confirmation" ]; then
                 completed|completed_with_errors|cancelled|failed) break ;;
             esac
         done
+    elif [ "$CONFIRM_STATUS" -ne 0 ]; then
+        echo "==> Confirm failed (exit $CONFIRM_STATUS) — see error above" >&2
+        exit "$CONFIRM_STATUS"
     fi
 fi
 

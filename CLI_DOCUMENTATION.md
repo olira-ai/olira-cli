@@ -289,8 +289,8 @@ Some patients may not have view slots for every template configured on your org
 When that happens, the job reaches `AWAITING_CONFIRMATION` with **Warnings** in the
 job detail (code `missing_template_slot`), separate from hard **Errors**.
 
-If warnings are present and your terminal is interactive, `upload --watch`,
-`status`, and `confirm` offer a choice:
+If warnings are present and your terminal is interactive, `upload --watch`
+and `confirm` offer a choice:
 
 1. **Initialize missing templates and continue** (recommended) — confirms with
    `initialize_missing_templates=true` so the API creates the missing slots before Phase 2.

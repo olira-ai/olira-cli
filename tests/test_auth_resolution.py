@@ -35,6 +35,15 @@ def test_sdk_uses_creds_file_api_server_when_present(creds_file, monkeypatch):
     assert auth.api_server == "https://app-api.stage.olira.ai/app-api"
 
 
+def test_sdk_env_url_overrides_creds_file_api_server(creds_file, monkeypatch):
+    """OLIRA_API_URL must win over a stored login's api_server, not the other way round."""
+    creds_file(api_server="https://app-api.stage.olira.ai/app-api")
+    monkeypatch.setenv("OLIRA_API_KEY", "olira_dev_key")
+    monkeypatch.setenv("OLIRA_API_URL", "https://app-api.dev.olira.ai/app-api")
+    auth = resolve_auth("sdk")
+    assert auth.api_server == "https://app-api.dev.olira.ai/app-api"
+
+
 def test_sdk_rejects_login_only_credential(creds_file):
     creds_file()
     with pytest.raises(AuthError) as exc:

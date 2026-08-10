@@ -44,6 +44,30 @@ def test_500_maps_to_network_error(run_cli, creds_file, monkeypatch):
     assert env["error"]["code"] == "SERVER_ERROR"
 
 
+def test_revoke_rejects_ambiguous_key_name(run_cli, creds_file):
+    """Two keys sharing a name must not silently revoke whichever the server listed first."""
+    creds_file()
+
+    def _h(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"id": "key-1", "name": "ci-pipeline"},
+                    {"id": "key-2", "name": "ci-pipeline"},
+                ]
+            },
+        )
+
+    code, out, _ = run_cli(["--json", "keys", "revoke", "ci-pipeline", "--yes"], handler=_h)
+    assert code == 5
+    env = json_envelope(out)
+    assert env["ok"] is False
+    assert env["error"]["code"] == "AMBIGUOUS_KEY"
+    assert "key-1" in env["error"]["remediation"]
+    assert "key-2" in env["error"]["remediation"]
+
+
 def test_revoke_never_tracebacks_on_http_error(run_cli, creds_file):
     """Regression: api.py's revoke used to leave the list-fetch outside any try/except."""
     creds_file()
@@ -62,6 +86,17 @@ def test_non_json_error_body_does_not_crash(run_cli, creds_file):
     assert code == 7
     assert "Traceback" not in err
     json_envelope(out)
+
+
+def test_list_shaped_detail_body_stays_a_string(run_cli, creds_file):
+    """A FastAPI-style validation body ({"detail": [{"msg": ...}]}) must not leak a
+    list into CliError.message — the JSON error envelope declares message: str."""
+    creds_file()
+    body = {"detail": [{"msg": "invalid value", "loc": ["body", "name"]}]}
+    code, out, _ = run_cli(["--json", "keys", "revoke", "some-key", "--yes"], handler=_handler(422, body))
+    assert code == 5
+    env = json_envelope(out)
+    assert isinstance(env["error"]["message"], str)
 
 
 def test_json_flag_works_in_both_positions(run_cli, no_creds):

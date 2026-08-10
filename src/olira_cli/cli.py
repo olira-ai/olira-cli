@@ -14,7 +14,7 @@ from olira_cli.errors import CliError, CommandResult
 _ENV_HELP = "Target environment: dev | stage | prod | local" if _INTERNAL_BUILD else argparse.SUPPRESS
 _MCP_HELP = "MCP server URL override (e.g. http://localhost:8084)" if _INTERNAL_BUILD else argparse.SUPPRESS
 _CONSOLE_HELP = "Console URL override (e.g. http://localhost:3000)" if _INTERNAL_BUILD else argparse.SUPPRESS
-_PORT_HELP = "Callback server port (default: 9100)" if _INTERNAL_BUILD else argparse.SUPPRESS
+_PORT_HELP = "Callback server port (default: 9876)" if _INTERNAL_BUILD else argparse.SUPPRESS
 
 
 def _common_parser() -> argparse.ArgumentParser:

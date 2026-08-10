@@ -160,17 +160,22 @@ def _keys_list(auth: Auth) -> CommandResult:
 
 def _keys_revoke(auth: Auth, key_ref: str, *, yes: bool) -> CommandResult:
     keys = _fetch_keys(auth)
-    key_id = None
-    key_name = None
+    matches = []
     for k in keys:
         kid = str(k.get("id") or k.get("_id") or "")
         name = k.get("name") or k.get("display_name") or ""
         if kid == key_ref or name == key_ref:
-            key_id = kid
-            key_name = name
-            break
-    if not key_id:
+            matches.append((kid, name))
+    if not matches:
         raise CliError(f"Key '{key_ref}' not found.", code="NOT_FOUND", exit_code=4)
+    if len(matches) > 1:
+        raise CliError(
+            f"'{key_ref}' matches {len(matches)} keys.",
+            code="AMBIGUOUS_KEY",
+            exit_code=5,
+            remediation=f"Revoke by id instead: {', '.join(kid for kid, _ in matches)}",
+        )
+    key_id, key_name = matches[0]
 
     if not yes:
         require_tty("Revoking a key", "--yes")
@@ -376,7 +381,8 @@ def cmd_configure_claude(args: Any) -> CommandResult:
 def _merge_codex_mcp_block(config_path: pathlib.Path, mcp_server: str, api_key_env: str, version: str) -> str:
     from olira_cli.agent_docs import write_marker_block
 
-    begin = f"# BEGIN olira-cli (managed by 'olira configure codex', v{version})"
+    begin_prefix = "# BEGIN olira-cli (managed by 'olira configure codex'"
+    begin = f"{begin_prefix}, v{version})"
     end = "# END olira-cli"
     block = (
         f"{begin}\n"
@@ -385,7 +391,7 @@ def _merge_codex_mcp_block(config_path: pathlib.Path, mcp_server: str, api_key_e
         f'bearer_token_env_var = "{api_key_env}"\n'
         f"{end}\n"
     )
-    return write_marker_block(config_path, block, begin_prefix=begin, end_marker=end)
+    return write_marker_block(config_path, block, begin_prefix=begin_prefix, end_marker=end)
 
 
 def cmd_configure_codex(args: Any) -> CommandResult:

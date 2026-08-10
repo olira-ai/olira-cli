@@ -90,6 +90,25 @@ def test_configure_codex_preserves_surrounding_toml_content(run_cli, no_creds, t
     assert 'model = "gpt-5"' in content2
 
 
+def test_configure_codex_replaces_block_from_older_cli_version(run_cli, no_creds, tmp_path):
+    """An upgrade must replace a block written by an older CLI version, not append a duplicate."""
+    config_path = tmp_path / ".codex" / "config.toml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        "# BEGIN olira-cli (managed by 'olira configure codex', v0.9.0)\n"
+        "[mcp_servers.olira-patient-state]\n"
+        'url = "https://old.example.com/mcp"\n'
+        'bearer_token_env_var = "OLD_ENV_VAR"\n'
+        "# END olira-cli\n"
+    )
+
+    run_cli(["--json", "configure", "codex", "--dir", str(tmp_path)])
+    content = config_path.read_text()
+    assert content.count("[mcp_servers.olira-patient-state]") == 1
+    assert "OLD_ENV_VAR" not in content
+    assert "v0.9.0" not in content
+
+
 def test_init_agent_codex_only_writes_agents_md(run_cli, tmp_path):
     code, out, _ = run_cli(["--json", "init", "agent", "--dir", str(tmp_path), "--codex"])
     assert code == 0

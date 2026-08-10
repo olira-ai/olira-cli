@@ -82,7 +82,10 @@ def _extract_body_message(response: httpx.Response) -> str | None:
         return None
     if not isinstance(body, dict):
         return None
-    return body.get("detail") or body.get("message")
+    message = body.get("detail") or body.get("message")
+    if message is None:
+        return None
+    return message if isinstance(message, str) else str(message)
 
 
 def from_http_error(e: httpx.HTTPStatusError) -> CliError:

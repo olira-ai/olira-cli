@@ -78,6 +78,19 @@ class Auth:
     source: Literal["flag", "env", "login"]
 
 
+def _resolve_api_server(creds: dict[str, Any] | None) -> str:
+    """OLIRA_API_URL always wins over a stored login's api_server — an operator switching
+    environments on a machine with an old login shouldn't have requests silently sent
+    to the stored base URL.
+    """
+    api_server = os.environ.get("OLIRA_API_URL") or (creds or {}).get("api_server")
+    if not api_server:
+        from olira_cli.urls import default_api_url
+
+        api_server = default_api_url("prod")
+    return api_server
+
+
 def resolve_auth(cls: Literal["sdk", "console"], api_key_flag: str | None = None) -> Auth:
     """Resolve the credential a command should use, enforcing the sdk/console split.
 
@@ -93,11 +106,7 @@ def resolve_auth(cls: Literal["sdk", "console"], api_key_flag: str | None = None
 
     if cls == "sdk":
         if api_key:
-            api_server = (creds or {}).get("api_server") or os.environ.get("OLIRA_API_URL")
-            if not api_server:
-                from olira_cli.urls import default_api_url
-
-                api_server = default_api_url("prod")
+            api_server = _resolve_api_server(creds)
             return Auth(token=api_key, api_server=api_server, source="flag" if api_key_flag else "env")
         if creds and creds.get("access_token"):
             raise AuthError(
@@ -113,12 +122,7 @@ def resolve_auth(cls: Literal["sdk", "console"], api_key_flag: str | None = None
 
     # cls == "console"
     if creds and creds.get("access_token"):
-        api_server = creds.get("api_server") or os.environ.get("OLIRA_API_URL")
-        if not api_server:
-            from olira_cli.urls import default_api_url
-
-            api_server = default_api_url("prod")
-        return Auth(token=creds["access_token"], api_server=api_server, source="login")
+        return Auth(token=creds["access_token"], api_server=_resolve_api_server(creds), source="login")
     if api_key:
         raise AuthError(
             "This command requires browser login, not an API key.",
