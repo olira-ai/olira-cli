@@ -51,6 +51,9 @@ olira = "olira_cli.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+olira_cli = ["skills/*.md"]
+
 [tool.uv]
 index-url = "https://pypi.org/simple"
 

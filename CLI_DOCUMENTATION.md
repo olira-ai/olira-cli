@@ -80,7 +80,7 @@ This is also what powers `olira init agent` (below).
 - Every place that would otherwise prompt has a flag that answers it up front: `--yes` (`keys revoke`, `ingest cancel`), `--name`/`--scopes` (`keys create`), `--dir` (`configure cursor`), `--init-templates`/`--no-backfill` (`ingest confirm`). Without the flag and without a TTY, the command fails fast (exit `6`, `PROMPT_REQUIRED`) naming the flag to add — it never hangs.
 - Pass **`--timeout SECONDS`** with `--watch` on long-running ingest commands; without it, watching a job that never reaches a terminal state polls forever.
 - **Querying** (`patients`, `state`, `cohorts`, `projects`, `integrations`) is entirely read-only — same API key as ingestion, no writes, no prompts. See each command's section below.
-- **`olira init agent`** writes `AGENTS.md` plus three focused skills (`olira-ingest`/`olira-query`/`olira-setup`, as both Claude Code skills and Cursor rules) into the current repo, covering all of the above plus the ingestion state machine, JSONL schema, query commands, and a failure playbook — point a coding agent at a repo with these files and it can drive the CLI correctly without additional instructions. See [`olira init agent`](#olira-init-agent) below for why it's split this way.
+- **`olira init agent`** writes `AGENTS.md` plus three focused skills (`olira-ingest`/`olira-query`/`olira-setup`) into the current repo — as Claude Code skills and/or the shared `.agents/skills/` format Cursor and Codex both discover from — covering all of the above plus the ingestion state machine, JSONL schema, query commands, and a failure playbook. Point a coding agent at a repo with these files and it can drive the CLI correctly without additional instructions. See [`olira init agent`](#olira-init-agent) below for why it's split this way.
 - See [`examples/`](https://github.com/olira-ai/olira-cli/tree/main/examples) in the CLI repo for runnable end-to-end scripts (ingest, query a patient, check integration health) and a full guide on driving this CLI with a coding agent.
 
 ### Environment variables
@@ -207,18 +207,24 @@ focused skills** — split by workflow rather than one monolith, since the
 ingestion state machine is genuinely complex and a "list patients" task
 shouldn't have to load it:
 
-| Skill | Covers | Written as |
+| Skill | Covers | Written under |
 |---|---|---|
-| `olira-ingest` | The ingestion state machine, missing-template-slots, `--watch`/`--timeout`, the JSONL schema, ingest-specific failure playbook | `.claude/skills/olira-ingest/SKILL.md`, `.cursor/rules/olira-ingest.mdc` |
-| `olira-query` | `patients`/`state`/`cohorts`/`projects`/`integrations` command reference and recipes | `.claude/skills/olira-query/SKILL.md`, `.cursor/rules/olira-query.mdc` |
-| `olira-setup` | Auth model, scopes, key management, MCP client configuration | `.claude/skills/olira-setup/SKILL.md`, `.cursor/rules/olira-setup.mdc` |
+| `olira-ingest` | The ingestion state machine, missing-template-slots, `--watch`/`--timeout`, the JSONL schema, ingest-specific failure playbook | `<slug>/SKILL.md` |
+| `olira-query` | `patients`/`state`/`cohorts`/`projects`/`integrations` command reference and recipes | `<slug>/SKILL.md` |
+| `olira-setup` | Auth model, scopes, key management, MCP client configuration | `<slug>/SKILL.md` |
+
+`--claude` writes to `.claude/skills/<slug>/SKILL.md`. `--cursor` and `--codex`
+both write the identical files to `.agents/skills/<slug>/SKILL.md` — the
+shared, vendor-neutral location both clients discover skills from (Claude
+Code only reads `.claude/skills/`) — so passing either is enough, and passing
+both doesn't duplicate anything.
 
 Content needed by every task regardless of which skill (if any) loads — the
 credential-class split, the JSON envelope, the full exit-code table — lives
 once in the `AGENTS.md` digest, which most agents load unconditionally;
 skills reference it rather than repeat it. Idempotent: re-running updates
-`AGENTS.md`'s managed block and overwrites the skill/rule files only if
-their content changed; never prompts.
+`AGENTS.md`'s managed block and overwrites the skill files only if their
+content changed; never prompts.
 
 ```bash
 olira init agent
@@ -228,9 +234,9 @@ olira init agent --dir ./my-integration
 
 | Flag       | Description                                                                    |
 | ---------- | -------------------------------------------------------------------------------- |
-| `--claude` | Write the Claude Code skills (`.claude/skills/<name>/SKILL.md`)                  |
-| `--cursor` | Write the Cursor rules (`.cursor/rules/<name>.mdc`)                              |
-| `--codex`  | No-op beyond `AGENTS.md` — Codex CLI reads it natively                           |
+| `--claude` | Write the skills under `.claude/skills/<slug>/SKILL.md`                          |
+| `--cursor` | Write the skills under `.agents/skills/<slug>/SKILL.md` (shared with `--codex`)  |
+| `--codex`  | Write the skills under `.agents/skills/<slug>/SKILL.md` (shared with `--cursor`) |
 | `--dir`    | Directory to write into (default: current directory)                            |
 
 Passing none of `--claude`/`--cursor`/`--codex` writes for all three (plus `AGENTS.md`, which is always written regardless).

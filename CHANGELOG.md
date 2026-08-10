@@ -31,14 +31,17 @@ usage is unaffected except where noted under Changed.
   org-wide API keys can target a non-default project.
 - `olira init agent [--claude] [--cursor] [--codex] [--dir]` —
   writes `AGENTS.md` plus three focused skills (`olira-ingest`,
-  `olira-query`, `olira-setup`, as both Claude Code skills and Cursor
-  rules) into a repo so coding agents can discover and use the CLI
-  correctly. Split by workflow rather than one monolith so a task only
-  loads the skill it needs (the ingestion state machine is genuinely
-  complex; a "list patients" task shouldn't have to load it). Content every
-  task needs regardless of which skill loads — the credential-class split,
-  the JSON envelope, the full exit-code table — lives once in `AGENTS.md`,
-  which most agents load unconditionally. Idempotent; safe to re-run.
+  `olira-query`, `olira-setup`) into a repo so coding agents can discover
+  and use the CLI correctly: `.claude/skills/<slug>/SKILL.md` for Claude
+  Code, `.agents/skills/<slug>/SKILL.md` for Cursor and Codex (the shared,
+  vendor-neutral location both discover skills from — `--cursor`/`--codex`
+  write identical files there, so passing either is enough). Split by
+  workflow rather than one monolith so a task only loads the skill it needs
+  (the ingestion state machine is genuinely complex; a "list patients" task
+  shouldn't have to load it). Content every task needs regardless of which
+  skill loads — the credential-class split, the JSON envelope, the full
+  exit-code table — lives once in `AGENTS.md`, which most agents load
+  unconditionally. Idempotent; safe to re-run.
 - Credential-class-aware auth resolution: `ingest`/`validate --check-org`
   require an API key and `keys`/`configure cursor` require a browser login;
   using the wrong one now fails fast with a specific remediation instead of

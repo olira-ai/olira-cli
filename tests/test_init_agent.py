@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from tests.conftest import json_envelope
 
-_CLAUDE_SKILLS = ["olira-ingest", "olira-query", "olira-setup"]
-_CURSOR_RULES = ["olira-ingest.mdc", "olira-query.mdc", "olira-setup.mdc"]
+_SKILLS = ["olira-ingest", "olira-query", "olira-setup"]
 
 
 def test_init_agent_creates_all_files(run_cli, tmp_path):
@@ -15,10 +14,9 @@ def test_init_agent_creates_all_files(run_cli, tmp_path):
     actions = {f["action"] for f in env["data"]["files"]}
     assert actions == {"created"}
     assert (tmp_path / "AGENTS.md").exists()
-    for slug in _CLAUDE_SKILLS:
+    for slug in _SKILLS:
         assert (tmp_path / ".claude" / "skills" / slug / "SKILL.md").exists()
-    for name in _CURSOR_RULES:
-        assert (tmp_path / ".cursor" / "rules" / name).exists()
+        assert (tmp_path / ".agents" / "skills" / slug / "SKILL.md").exists()
 
 
 def test_init_agent_second_run_is_unchanged(run_cli, tmp_path):
@@ -47,9 +45,18 @@ def test_init_agent_claude_flag_filters_files(run_cli, tmp_path):
     code, out, _ = run_cli(["--json", "init", "agent", "--dir", str(tmp_path), "--claude"])
     assert code == 0
     assert (tmp_path / "AGENTS.md").exists()
-    for slug in _CLAUDE_SKILLS:
+    for slug in _SKILLS:
         assert (tmp_path / ".claude" / "skills" / slug / "SKILL.md").exists()
-    assert not (tmp_path / ".cursor").exists()
+    assert not (tmp_path / ".agents").exists()
+
+
+def test_init_agent_shared_skills_are_identical_to_claude(run_cli, tmp_path):
+    """Cursor/Codex and Claude Code read the same SKILL.md format — one file, no per-client fork."""
+    run_cli(["--json", "init", "agent", "--dir", str(tmp_path)])
+    for slug in _SKILLS:
+        claude_content = (tmp_path / ".claude" / "skills" / slug / "SKILL.md").read_text()
+        shared_content = (tmp_path / ".agents" / "skills" / slug / "SKILL.md").read_text()
+        assert claude_content == shared_content
 
 
 def test_init_agent_never_prompts(run_cli, tmp_path, no_tty, refuse_input):
@@ -75,3 +82,12 @@ def test_init_agent_skills_are_independently_focused(run_cli, tmp_path):
     assert "name: olira-setup" in setup
     assert "keys create" in setup
     assert "AWAITING_CONFIRMATION".lower() not in setup.lower()
+
+
+def test_init_agent_skill_content_has_no_unsubstituted_placeholder(run_cli, tmp_path):
+    """{{VERSION}} must always be replaced — a leaked placeholder means the loader broke."""
+    run_cli(["--json", "init", "agent", "--dir", str(tmp_path)])
+    for slug in _SKILLS:
+        content = (tmp_path / ".claude" / "skills" / slug / "SKILL.md").read_text()
+        assert "{{VERSION}}" not in content
+        assert "doc matches v" in content

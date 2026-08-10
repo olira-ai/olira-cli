@@ -105,7 +105,7 @@ with an API key via `OLIRA_API_KEY`, not by logging in.
 | `olira configure cursor` | Write the MCP server entry into `mcp.json` with your current login token. Prefers `.cursor/` in the current directory. |
 | `olira configure claude` | Write a project-scoped MCP server entry into `.mcp.json` for Claude Code. No login needed — references an env var, never a literal token. |
 | `olira configure codex` | Same, for Codex CLI (`.codex/config.toml`). |
-| `olira init agent` | Write agent-facing docs into the current repo: `AGENTS.md` plus three focused Claude Code skills / Cursor rules (ingest, query, setup). |
+| `olira init agent` | Write agent-facing docs into the current repo: `AGENTS.md` plus three focused skills (ingest, query, setup) for Claude Code and/or Cursor/Codex. |
 | `olira keys create` | Create an API key (interactive wizard). Use `--name` and `--scopes` to skip prompts. |
 | `olira keys list` | List API keys for your organization, including their scopes. |
 | `olira keys revoke <name-or-id>` | Permanently revoke an API key. Use `--yes` to skip the confirmation prompt. |
@@ -135,13 +135,16 @@ olira init agent
 ```
 
 This writes `AGENTS.md` plus **three focused skills** — `olira-ingest`,
-`olira-query`, `olira-setup` — as `.claude/skills/<name>/SKILL.md` and
-`.cursor/rules/<name>.mdc`. Split by workflow rather than one monolith
-because the ingestion state machine is genuinely complex and a "list
-patients" task shouldn't have to load it: each skill covers only its own
-commands (auth, exit codes, and the JSON envelope — needed by everything —
-live once in `AGENTS.md`, which most agents load unconditionally). Safe to
-re-run; it updates in place rather than duplicating content.
+`olira-query`, `olira-setup` — as `.claude/skills/<name>/SKILL.md` for Claude
+Code and `.agents/skills/<name>/SKILL.md` for Cursor and Codex, which both
+discover skills from that shared, vendor-neutral location (`--cursor` and
+`--codex` write the identical files there — pass either). Split by workflow
+rather than one monolith because the ingestion state machine is genuinely
+complex and a "list patients" task shouldn't have to load it: each skill
+covers only its own commands (auth, exit codes, and the JSON envelope —
+needed by everything — live once in `AGENTS.md`, which most agents load
+unconditionally). Safe to re-run; it updates in place rather than
+duplicating content.
 
 **Connect your agent directly to the Olira MCP server** (so it can query
 patient state as a tool, not by shelling out to the CLI):

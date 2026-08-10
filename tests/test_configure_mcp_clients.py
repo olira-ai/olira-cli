@@ -110,10 +110,25 @@ def test_configure_codex_replaces_block_from_older_cli_version(run_cli, no_creds
     assert "old.example.com" not in content
 
 
-def test_init_agent_codex_only_writes_agents_md(run_cli, tmp_path):
+def test_init_agent_codex_writes_shared_agents_skills_dir(run_cli, tmp_path):
+    """Codex discovers skills from .agents/skills/, not a Codex-specific directory."""
     code, out, _ = run_cli(["--json", "init", "agent", "--dir", str(tmp_path), "--codex"])
     assert code == 0
     env = json_envelope(out)
     paths = {f["path"] for f in env["data"]["files"]}
-    assert paths == {str(tmp_path / "AGENTS.md")}
-    assert (tmp_path / "AGENTS.md").exists()
+    assert paths == {
+        str(tmp_path / "AGENTS.md"),
+        str(tmp_path / ".agents" / "skills" / "olira-ingest" / "SKILL.md"),
+        str(tmp_path / ".agents" / "skills" / "olira-query" / "SKILL.md"),
+        str(tmp_path / ".agents" / "skills" / "olira-setup" / "SKILL.md"),
+    }
+    assert not (tmp_path / ".claude").exists()
+
+
+def test_init_agent_cursor_and_codex_share_the_same_skill_files(run_cli, tmp_path):
+    """--cursor and --codex both target .agents/skills/ — passing both writes it once, not twice."""
+    code, out, _ = run_cli(["--json", "init", "agent", "--dir", str(tmp_path), "--cursor", "--codex"])
+    assert code == 0
+    env = json_envelope(out)
+    paths = [f["path"] for f in env["data"]["files"]]
+    assert len(paths) == len(set(paths))

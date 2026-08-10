@@ -159,12 +159,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     init_agent = init_sub.add_parser(
         "agent",
-        help="Write AGENTS.md plus per-workflow skills/rules (olira-ingest, olira-query, olira-setup)",
+        help="Write AGENTS.md plus per-workflow skills (olira-ingest, olira-query, olira-setup)",
         parents=[common],
     )
-    init_agent.add_argument("--claude", action="store_true", help="Write the Claude Code skills")
-    init_agent.add_argument("--cursor", action="store_true", help="Write the Cursor rules")
-    init_agent.add_argument("--codex", action="store_true", help="No-op beyond AGENTS.md — Codex CLI reads it natively")
+    init_agent.add_argument("--claude", action="store_true", help="Write the skills under .claude/skills/")
+    init_agent.add_argument(
+        "--cursor", action="store_true", help="Write the skills under .agents/skills/ (shared with --codex)"
+    )
+    init_agent.add_argument(
+        "--codex", action="store_true", help="Write the skills under .agents/skills/ (shared with --cursor)"
+    )
     init_agent.add_argument(
         "--dir",
         dest="agents_dir",
