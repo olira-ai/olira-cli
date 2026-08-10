@@ -112,7 +112,8 @@ def resolve_auth(cls: Literal["sdk", "console"], api_key_flag: str | None = None
             raise AuthError(
                 "This command requires an API key, not a browser login.",
                 remediation=(
-                    "Set OLIRA_API_KEY=olira_... (create one with 'olira keys create --scopes sdk:historical-ingest')."
+                    "Set OLIRA_API_KEY=olira_... (create one with "
+                    "'olira keys create --scopes <the scope this command needs>')."
                 ),
             )
         raise AuthError(

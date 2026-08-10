@@ -52,6 +52,17 @@ def test_sdk_rejects_login_only_credential(creds_file):
     assert "OLIRA_API_KEY" in exc.value.remediation
 
 
+def test_sdk_login_only_remediation_does_not_suggest_a_fixed_scope(creds_file):
+    """resolve_auth is shared by every sdk-class command (ingest, patients, state,
+    integrations, ...) and can't know which scope the caller actually needs — it must
+    not hardcode one (regression: used to always suggest sdk:historical-ingest, wrong
+    for every command except ingest)."""
+    creds_file()
+    with pytest.raises(AuthError) as exc:
+        resolve_auth("sdk")
+    assert "sdk:historical-ingest" not in exc.value.remediation
+
+
 def test_sdk_with_nothing_raises_auth_required(no_creds):
     with pytest.raises(AuthError) as exc:
         resolve_auth("sdk")
