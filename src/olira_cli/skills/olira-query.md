@@ -1,6 +1,6 @@
 ---
 name: olira-query
-description: Query patients, clinical state, cohorts, projects, and EHR integrations read-only with the Olira CLI — same API key as ingestion, no writes, no prompts.
+description: Query patients, clinical state, cohorts, projects, EHR integrations, and the log-type catalog read-only with the Olira CLI — same API key as ingestion, no writes, no prompts.
 ---
 
 # Olira CLI — Querying
@@ -14,8 +14,8 @@ table shared by every olira command, see `AGENTS.md` at the repo root.
 Same **API key** (`OLIRA_API_KEY=olira_...`) as ingestion — a browser login
 is rejected for all of these. Each command needs a specific scope; see the
 table below. `patients`/`cohorts` accept `--project <id-or-slug>` (or
-`OLIRA_PROJECT`); `state`/`projects`/`integrations` don't (patient-keyed or
-org-level).
+`OLIRA_PROJECT`); `state`/`projects`/`integrations`/`log-types` don't
+(patient-keyed or org-level).
 
 ## Commands
 
@@ -24,12 +24,22 @@ Read-only — same `OLIRA_API_KEY` as `ingest`/`validate`, no writes, no prompts
 | Command | Scope needed | `--project`? |
 |---|---|---|
 | `olira patients list [--limit N] [--offset N] [--external-system S --external-value V]` / `get <patient_id>` | `api:manage-patients` | yes |
-| `olira state stable\|modules\|views\|view-block\|recent\|logs\|events\|memories <patient_id> ...` | `sdk:state-read` | no (patient-keyed) |
+| `olira state <subcommand> <patient_id> ...` — subcommands: `stable`, `modules`, `views`, `view-block`, `recent`, `logs`, `events`, `memories` | `sdk:state-read` | no (patient-keyed) |
 | `olira cohorts list` / `get <cohort_id>` / `templates <cohort_id>` | `api:manage-patients` | yes |
 | `olira projects list` / `get <id_or_slug>` | `api:manage-projects` (org-wide key) | n/a (no flag exists) |
 | `olira integrations catalog` / `list` / `get <id>` / `data-points <id> [--catalog]` | `sdk:integrations` | n/a (org-level) |
+| `olira log-types list` / `get <subtype>` | `sdk:event-log` | n/a (org-level) |
 
-`state modules`/`state views` list when called with no second positional arg, or fetch one item's full payload when given a type (e.g. `olira state modules <patient_id> symptoms`). Clinical payloads are arbitrary JSON — read `data` in `--json` mode rather than parsing prose.
+`state modules` and `state views` have two forms:
+- No second argument → list summaries: `olira state modules <patient_id>`.
+- With a type argument → one item's full payload: `olira state modules <patient_id> symptoms`.
+
+## Reading responses
+
+Always pass `--json` and read the `data` field of the final envelope:
+- `patients list` → the Olira patient id is `data.patients[].id`; `data.total` and `data.has_more` drive pagination.
+- `state logs` → `data.logs[]` (each has `type`, `timestamp`, `payload`); `data.count`.
+- Clinical payloads are arbitrary JSON — read them as data, never parse the human-mode prose output.
 
 ## Recipes
 
@@ -42,6 +52,11 @@ olira state stable <patient_id> --json
 # Check an EHR integration's sync health
 olira integrations list --json
 olira integrations data-points <integration_id> --json
+
+# Mapping your source field to an Olira log type: browse the catalog,
+# then pull one type's full payload JSON Schema before writing the mapping
+olira log-types list --json
+olira log-types get symptom_report --json
 ```
 
 ## Failure playbook

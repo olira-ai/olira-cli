@@ -105,7 +105,7 @@ with an API key via `OLIRA_API_KEY`, not by logging in.
 | `olira configure cursor` | Write the MCP server entry into `mcp.json` with your current login token. Prefers `.cursor/` in the current directory. |
 | `olira configure claude` | Write a project-scoped MCP server entry into `.mcp.json` for Claude Code. No login needed — references an env var, never a literal token. |
 | `olira configure codex` | Same, for Codex CLI (`.codex/config.toml`). |
-| `olira init agent` | Write agent-facing docs into the current repo: `AGENTS.md` plus three focused skills (ingest, query, setup) for Claude Code and/or Cursor/Codex. |
+| `olira init agent` | Write agent-facing docs into the current repo: `AGENTS.md` plus four focused skills (ingest, logging, query, setup) for Claude Code and/or Cursor/Codex. |
 | `olira keys create` | Create an API key (interactive wizard). Use `--name` and `--scopes` to skip prompts. |
 | `olira keys list` | List API keys for your organization, including their scopes. |
 | `olira keys revoke <name-or-id>` | Permanently revoke an API key. Use `--yes` to skip the confirmation prompt. |
@@ -116,6 +116,7 @@ with an API key via `OLIRA_API_KEY`, not by logging in.
 | `olira cohorts list` / `get <id>` / `templates <id>` | Query cohorts (read-only). |
 | `olira projects list` / `get <id_or_slug>` | Query projects (read-only; org-wide key). |
 | `olira integrations catalog\|list\|get\|data-points` | Query EHR integrations (read-only). |
+| `olira log-types list` / `get <subtype>` | Query the platform's log-type catalog, including full payload schemas (read-only). |
 
 Every command accepts `--json` for machine-readable output — see
 [Using the CLI from a coding agent](#using-the-cli-from-a-coding-agent) and
@@ -134,15 +135,17 @@ manage keys, read job status) — run once, in the repo the agent works in:
 olira init agent
 ```
 
-This writes `AGENTS.md` plus **three focused skills** — `olira-ingest`,
-`olira-query`, `olira-setup` — as `.claude/skills/<name>/SKILL.md` for Claude
-Code and `.agents/skills/<name>/SKILL.md` for Cursor and Codex, which both
-discover skills from that shared, vendor-neutral location (`--cursor` and
-`--codex` write the identical files there — pass either). Split by workflow
-rather than one monolith because the ingestion state machine is genuinely
-complex and a "list patients" task shouldn't have to load it: each skill
-covers only its own commands (auth, exit codes, and the JSON envelope —
-needed by everything — live once in `AGENTS.md`, which most agents load
+This writes `AGENTS.md` plus **four focused skills** — `olira-ingest`
+(bulk historical files), `olira-logging` (instrumenting your code to log
+live events via the SDK), `olira-query`, `olira-setup` — as
+`.claude/skills/<name>/SKILL.md` for Claude Code and
+`.agents/skills/<name>/SKILL.md` for Cursor and Codex, which both discover
+skills from that shared, vendor-neutral location (`--cursor` and `--codex`
+write the identical files there — pass either). Split by workflow rather
+than one monolith because the ingestion state machine is genuinely complex
+and a "list patients" task shouldn't have to load it: each skill covers
+only its own commands (auth, exit codes, and the JSON envelope — needed by
+everything — live once in `AGENTS.md`, which most agents load
 unconditionally). Safe to re-run; it updates in place rather than
 duplicating content.
 
@@ -168,7 +171,7 @@ When creating an API key you will be prompted to select one or more scopes:
 | Scope | Description |
 |-------|-------------|
 | `mcp:patient-state` | Query patient state via the MCP Patient State server |
-| `sdk:event-log` | Log health events and upload passive signal Parquet (`send_signals`) via the Olira SDK |
+| `sdk:event-log` | Log health events and upload passive signal Parquet (`send_signals`) via the Olira SDK; also gates `olira log-types` discovery |
 | `sdk:patient-token` | Mint short-lived, patient-locked JWTs for SDK use |
 | `api:manage-patients` | Create, read, update, and deactivate patient records via REST |
 | `api:org-config` | Read and update organisation platform configuration via REST |
@@ -190,7 +193,7 @@ API keys never expire and are not stored locally — they live in the platform a
 
 Two credential types exist and are not interchangeable: `olira ingest *`,
 `olira validate --check-org`, and the read-only query commands (`patients`,
-`state`, `cohorts`, `projects`, `integrations`) all need an API key
+`state`, `cohorts`, `projects`, `integrations`, `log-types`) all need an API key
 (`OLIRA_API_KEY` or `--api-key`); `olira keys *` and `olira configure cursor`
 need a browser login instead. `olira configure claude`/`olira configure
 codex` need neither — they write a config that references an env var

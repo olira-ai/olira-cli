@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from tests.conftest import json_envelope
 
-_SKILLS = ["olira-ingest", "olira-query", "olira-setup"]
+_SKILLS = ["olira-ingest", "olira-logging", "olira-query", "olira-setup"]
 
 
 def test_init_agent_creates_all_files(run_cli, tmp_path):
@@ -68,12 +68,19 @@ def test_init_agent_skills_are_independently_focused(run_cli, tmp_path):
     """Each skill should carry only its own workflow's detail, not a copy of the others'."""
     run_cli(["--json", "init", "agent", "--dir", str(tmp_path), "--claude"])
     ingest = (tmp_path / ".claude" / "skills" / "olira-ingest" / "SKILL.md").read_text()
+    logging = (tmp_path / ".claude" / "skills" / "olira-logging" / "SKILL.md").read_text()
     query = (tmp_path / ".claude" / "skills" / "olira-query" / "SKILL.md").read_text()
     setup = (tmp_path / ".claude" / "skills" / "olira-setup" / "SKILL.md").read_text()
 
     assert "name: olira-ingest" in ingest
     assert "AWAITING_CONFIRMATION" in ingest.upper() or "awaiting_confirmation" in ingest
     assert "olira patients list" not in ingest
+    assert "client.log(" not in ingest
+
+    assert "name: olira-logging" in logging
+    assert "client.log(" in logging
+    assert "flush()" in logging
+    assert "AWAITING_CONFIRMATION".lower() not in logging.lower()
 
     assert "name: olira-query" in query
     assert "olira patients list" in query

@@ -36,13 +36,15 @@ export OLIRA_API_KEY=olira_...
 olira init agent
 ```
 
-This writes `AGENTS.md` plus three focused skills — `olira-ingest`,
-`olira-query`, `olira-setup` — as `.claude/skills/<name>/SKILL.md` for Claude
-Code and `.agents/skills/<name>/SKILL.md` for Cursor and Codex, the shared
+This writes `AGENTS.md` plus four focused skills — `olira-ingest`,
+`olira-logging`, `olira-query`, `olira-setup` — as
+`.claude/skills/<name>/SKILL.md` for Claude Code and
+`.agents/skills/<name>/SKILL.md` for Cursor and Codex, the shared
 location both of those discover skills from. `AGENTS.md` covers the auth
 model, the `--json` envelope, and the full exit-code table; each skill
-covers only its own workflow (the ingestion state machine, the read-only
-query commands, or key management) so a task only loads what it needs.
+covers only its own workflow (the ingestion state machine, instrumenting
+your code to log via the SDK, the read-only query commands, or key
+management) so a task only loads what it needs.
 Most agents (Claude Code, Cursor, Codex) pick these up automatically; if
 yours doesn't, point it at `AGENTS.md` directly.
 

@@ -8,6 +8,8 @@ description: Upload and manage historical patient data ingestion jobs with the O
 Installed as `olira` (verify with `olira --version`; this doc matches v{{VERSION}}).
 For the auth-class split, the JSON envelope shape, and the full exit-code
 table shared by every olira command, see `AGENTS.md` at the repo root.
+This workflow is for **bulk historical files**; live, ongoing logging from
+the codebase itself is the `olira-logging` skill instead.
 
 ## Auth
 
@@ -18,8 +20,9 @@ is rejected. Multi-project orgs: `--project <id-or-slug>` (or
 
 ## Golden rules for this workflow
 
-- Always pass a SHORT `--timeout` with `--watch` (e.g. `--timeout 60` to `--timeout 120`). This bounds how long *this one tool call* blocks — it is not a guess at the job's real duration. Ingestion jobs can legitimately run for hours; `--watch` is for catching the common case where a job finishes quickly, not for sitting through a long one. On exit `8` (`WATCH_TIMEOUT`), the job is still running server-side — report progress and check back with a plain `olira ingest status <job_id> --json` in a later turn instead of re-watching with an ever-bigger timeout.
-- Check `data.status` on ingestion jobs — `completed_with_errors` exits 0 but is a partial success.
+- Always pass a SHORT `--timeout` with `--watch` (60 to 120 seconds). The timeout bounds how long this one call blocks. It is not a guess at the job's real duration — jobs can legitimately run for hours.
+- Exit `8` (`WATCH_TIMEOUT`) means the job is STILL RUNNING, not failed. Report progress now; check again later with `olira ingest status <job_id> --json` (no `--watch`). Never retry with a bigger timeout.
+- Check `data.status` on every job response. `completed_with_errors` exits 0 but is a partial success — inspect `data.error_summary`.
 
 ## Ingestion job state machine
 
@@ -36,17 +39,18 @@ At `awaiting_confirmation`, some patients may be missing view template slots
 exactly one of:
 - `--init-templates` — create the missing templates and proceed (recommended)
 - `--no-backfill` — skip view generation for this job entirely
-- (interactive TTY only) an interactive prompt with the same choices
 
-Without one of these, `confirm` exits 6 with code `CONFIRMATION_REQUIRED`.
+(A third option, an interactive prompt, exists for humans at a TTY only —
+never rely on it as an agent.) Without one of these flags, `confirm` exits 6
+with code `CONFIRMATION_REQUIRED`.
 
 ## JSONL schema
 
 One JSON object per line. Two record types:
 
 ```jsonl
-{"type": "patient", "data": {"external_identifiers": [{"system": "mrn", "value": "abc123"}], "first_name": "...", "date_of_birth": "1990-01-01"}}
-{"type": "log", "data": {"patient_id": "abc123", "event_type": "symptom_report", "timestamp": "2025-01-15T09:00:00Z", ...}}
+{"type": "patient", "data": {"external_identifiers": [{"system": "mrn", "value": "abc123"}], "first_name": "Jane", "date_of_birth": "1990-01-01"}}
+{"type": "log", "data": {"patient_id": "abc123", "event_type": "symptom_report", "timestamp": "2025-01-15T09:00:00Z", "payload": {"instrument": "esas_r", "symptoms": [{"name": "pain", "score": 6}]}}}
 ```
 
 Rules:
@@ -63,6 +67,8 @@ olira validate data.jsonl --json
 
 # 2. Upload. --watch --timeout is a SHORT bound (catches quick jobs) — if it
 #    times out (exit 8), the job is still running; that's not a failure.
+#    The job id you need for every later step is data.job.job_id in the
+#    final JSON envelope (fallback: data.job_id).
 olira ingest upload data.jsonl --json --watch --timeout 90
 
 # 3. If it paused at AWAITING_CONFIRMATION with missing templates
@@ -75,6 +81,15 @@ olira ingest status <job_id> --json
 # 5. Check what's failing across the org
 olira ingest list --status failed --json
 ```
+
+## Done checklist
+
+Before reporting the ingestion finished, confirm every item:
+
+- [ ] `olira validate` exited 0 on the final version of the file.
+- [ ] The job reached `completed` or `completed_with_errors` (from a `status` call, not assumed).
+- [ ] If `completed_with_errors`: `data.error_summary` inspected and reported to the user.
+- [ ] If the watch timed out: the job id and last-known progress were reported — a running job is not a finished task.
 
 ## Failure playbook
 

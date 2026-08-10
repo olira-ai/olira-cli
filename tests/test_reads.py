@@ -209,3 +209,53 @@ def test_integrations_data_points_subscribed_vs_catalog(run_cli, no_creds, monke
     handler2, seen2 = _capturing({"data": []})
     run_cli(["--json", "integrations", "data-points", "i1", "--catalog"], handler=handler2)
     assert seen2[0].url.path.endswith("/v1/integrations/i1/data-points/catalog")
+
+
+# ---------------------------------------------------------------------------
+# Log types — org-level, no --project flag exists at all
+# ---------------------------------------------------------------------------
+
+
+def test_log_types_list_requires_api_key(run_cli, creds_file):
+    creds_file()
+    code, out, _ = run_cli(["--json", "log-types", "list"])
+    assert code == 3
+
+
+def test_log_types_list_no_project_header(run_cli, no_creds, monkeypatch):
+    monkeypatch.setenv("OLIRA_API_KEY", "olira_dev_key")
+    handler, seen = _capturing({"data": [{"subtype": "symptom_report", "category": "symptom_reports"}]})
+    code, out, _ = run_cli(["--json", "log-types", "list"], handler=handler)
+    assert code == 0
+    assert seen[0].url.path.endswith("/v1/log-types")
+    assert "x-olira-project" not in seen[0].headers
+
+
+def test_log_types_get_by_subtype(run_cli, no_creds, monkeypatch):
+    monkeypatch.setenv("OLIRA_API_KEY", "olira_dev_key")
+    handler, seen = _capturing(
+        {
+            "subtype": "symptom_report",
+            "category": "symptom_reports",
+            "aliases": [],
+            "display_name": "Symptom report",
+            "description": "desc",
+            "payload_schema": {"type": "object"},
+            "payload_description": "",
+            "sources": ["logged"],
+            "version": 1,
+            "target_modules": [],
+            "user_facing": True,
+        }
+    )
+    run_cli(["--json", "log-types", "get", "symptom_report"], handler=handler)
+    assert seen[0].url.path.endswith("/v1/log-types/symptom_report")
+
+
+def test_log_types_has_no_project_flag(run_cli):
+    """Confirms --project isn't even a recognized flag for log-types (org-level resource)."""
+    import pytest
+
+    with pytest.raises(SystemExit) as exc:
+        run_cli(["log-types", "list", "--project", "x"])
+    assert exc.value.code == 2
