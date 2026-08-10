@@ -6,10 +6,14 @@ import json
 import logging
 import secrets
 import socket
+import sys
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlencode, urlparse
+
+from olira_cli.errors import CliError, CommandResult
+from olira_cli.urls import default_mcp_url, derive_api_url, derive_console_url
 
 logger = logging.getLogger(__name__)
 
@@ -134,33 +138,6 @@ FRAGMENT_BRIDGE_HTML = """<!DOCTYPE html>
 <p>Completing authentication, please wait…</p>
 </body>
 </html>"""
-
-
-def _derive_console_url(mcp_server_url: str) -> str | None:
-    """Infer the Console URL from the MCP server URL."""
-    try:
-        parsed = urlparse(mcp_server_url)
-        host = parsed.netloc or parsed.path
-        if "mcp-patient-state.dev.olira.ai" in host:
-            return "https://console.dev.olira.ai"
-        if "mcp-patient-state.stage.olira.ai" in host:
-            return "https://console.stage.olira.ai"
-        if "mcp-patient-state.olira.ai" in host and "stage" not in host and "dev" not in host:
-            return "https://console.olira.ai"
-    except Exception:
-        pass
-    return None
-
-
-def _derive_api_url(env: str) -> str:
-    """Return API base URL for the given env."""
-    if env == "prod":
-        return "https://app-api.prod.olira.ai/app-api"
-    if env == "stage":
-        return "https://app-api.stage.olira.ai/app-api"
-    if env == "local":
-        return "http://localhost:8080/app-api"
-    return "https://app-api.dev.olira.ai/app-api"
 
 
 def _decode_jwt_payload(token: str) -> dict | None:
@@ -411,31 +388,39 @@ def run_login(
     mcp_server: str | None = None,
     console_url: str | None = None,
     port: int = 9100,
-) -> int:
-    """Run the Console redirect login flow. Returns 0 on success, 1 on error."""
+) -> CommandResult:
+    """Run the Console redirect login flow.
+
+    Always interactive (it opens a browser and blocks on a local callback
+    server) — refuses to start headless or under --json rather than hanging
+    with no output.
+    """
+    from olira_cli import output
+
+    if not sys.stdin.isatty() or output.json_mode():
+        raise CliError(
+            "olira login requires an interactive terminal (it opens a browser).",
+            code="PROMPT_REQUIRED",
+            exit_code=6,
+            remediation="Set OLIRA_API_KEY=olira_... instead (create one with 'olira keys create').",
+        )
+
     if not mcp_server and not env:
-        print("Error: Either --env (dev|stage|prod) or --mcp-server URL is required.", file=__import__("sys").stderr)
-        return 1
+        raise CliError("Either --env (dev|stage|prod) or --mcp-server URL is required.", code="USAGE", exit_code=2)
     if mcp_server is None:
-        if env == "prod":
-            mcp_server = "https://mcp-patient-state.olira.ai"
-        elif env == "stage":
-            mcp_server = "https://mcp-patient-state.stage.olira.ai"
-        elif env == "local":
-            mcp_server = "http://localhost:8084"
-        else:
-            mcp_server = "https://mcp-patient-state.dev.olira.ai"
+        mcp_server = default_mcp_url(env or "prod")
     if console_url is None:
         if env == "local":
             console_url = "http://localhost:3000"
         else:
-            console_url = _derive_console_url(mcp_server)
+            console_url = derive_console_url(mcp_server)
         if not console_url:
-            print(
-                "Error: Could not infer console URL. Pass --console-url (e.g. http://localhost:3000).",
-                file=__import__("sys").stderr,
+            raise CliError(
+                "Could not infer console URL.",
+                code="USAGE",
+                exit_code=2,
+                remediation="Pass --console-url (e.g. http://localhost:3000).",
             )
-            return 1
     if env is None:
         if "dev.olira.ai" in mcp_server:
             env = "dev"
@@ -446,7 +431,7 @@ def run_login(
         else:
             env = "prod"
 
-    async def _do_login() -> int:
+    async def _do_login() -> CommandResult:
         nonce = secrets.token_urlsafe(16)
         handler = _ConsoleCallbackServer(port=port, console_url=console_url)
         await handler.start()
@@ -463,16 +448,14 @@ def run_login(
         try:
             access_token = await handler.wait_for_token(nonce)
         except ValueError as e:
-            print(f"Error: {e}", file=__import__("sys").stderr)
-            return 1
+            raise CliError(str(e), code="LOGIN_FAILED") from e
 
         result = await _validate_token_with_mcp(access_token, mcp_server)
         if not result.ok:
             if result.unreachable:
                 print(f"  Warning: MCP server unreachable ({mcp_server}) — skipping token validation.")
             else:
-                print("Error: Token was rejected by MCP server. Login failed.", file=__import__("sys").stderr)
-                return 1
+                raise CliError("Token was rejected by MCP server. Login failed.", code="LOGIN_FAILED")
 
         payload = _decode_jwt_payload(access_token)
         identity = "unknown"
@@ -486,7 +469,7 @@ def run_login(
                 dt = datetime.fromtimestamp(exp, tz=timezone.utc)
                 expires_at = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        api_server = _derive_api_url(env)
+        api_server = derive_api_url(env)
 
         from olira_cli.api import fetch_member_profile
 
@@ -520,6 +503,8 @@ def run_login(
         print("  Token saved to ~/.olira/credentials.json")
         if expires_at:
             print(f"  Expires: {expires_at}")
-        return 0
+        return CommandResult(
+            {"identity": identity, "organization": organization, "expires_at": expires_at, "mcp_server": mcp_server}
+        )
 
     return asyncio.run(_do_login())

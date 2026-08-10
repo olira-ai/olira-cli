@@ -54,6 +54,7 @@ jobs:
             --onefile \
             --name olira \
             --strip \
+            --add-data "src/olira_cli/skills:olira_cli/skills" \
             src/olira_cli/cli.py
 
       - name: Rename binary with platform suffix

@@ -1,10 +1,28 @@
-"""Read/write ~/.olira/credentials.json with secure permissions."""
+"""Read/write ~/.olira/credentials.json, and resolve which credential a command should use.
+
+Two credential *classes* exist and are not interchangeable (see
+services/app-api/AUTH.md):
+
+- "sdk"     — a raw `olira_{env}_...` API key. Required by every /v1/* route
+              (ingest, validate --check-org). A browser-login JWT is rejected
+              by these routes, so resolve_auth raises a clear AuthError
+              instead of sending a token the server will 401 on.
+- "console" — an Auth0 tenant JWT from `olira login`. Required by
+              /organization/* and /member/* routes (keys CRUD, configure
+              cursor). An API key cannot manage API keys, so the reverse
+              substitution is rejected too.
+"""
+
+from __future__ import annotations
 
 import json
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
+from olira_cli.errors import AuthError, CommandResult
 
 CREDENTIALS_DIR = Path.home() / ".olira"
 CREDENTIALS_FILE = CREDENTIALS_DIR / "credentials.json"
@@ -53,19 +71,98 @@ def delete_credentials() -> bool:
     return False
 
 
-def get_token_stdout(quiet: bool = False) -> int:
-    """Print access token to stdout. Always prints token (even if expired). Returns 0."""
+@dataclass
+class Auth:
+    token: str
+    api_server: str
+    source: Literal["flag", "env", "login"]
+
+
+def _resolve_api_server(creds: dict[str, Any] | None) -> str:
+    """OLIRA_API_URL always wins over a stored login's api_server — an operator switching
+    environments on a machine with an old login shouldn't have requests silently sent
+    to the stored base URL.
+    """
+    api_server = os.environ.get("OLIRA_API_URL") or (creds or {}).get("api_server")
+    if not api_server:
+        from olira_cli.urls import default_api_url
+
+        api_server = default_api_url("prod")
+    return api_server
+
+
+def resolve_auth(cls: Literal["sdk", "console"], api_key_flag: str | None = None) -> Auth:
+    """Resolve the credential a command should use, enforcing the sdk/console split.
+
+    sdk:     --api-key flag > OLIRA_API_KEY env. A credentials-file-only login
+             is *not* accepted — /v1/* routes reject anything but an
+             `olira_...` key, so we fail fast with the right remediation
+             instead of sending a token that will bounce with an opaque 401.
+    console: credentials file only (from `olira login`). An API key present
+             via flag/env is *not* accepted here either.
+    """
+    api_key = api_key_flag or os.environ.get("OLIRA_API_KEY")
+    creds = load_credentials()
+
+    if cls == "sdk":
+        if api_key:
+            api_server = _resolve_api_server(creds)
+            return Auth(token=api_key, api_server=api_server, source="flag" if api_key_flag else "env")
+        if creds and creds.get("access_token"):
+            raise AuthError(
+                "This command requires an API key, not a browser login.",
+                remediation=(
+                    "Set OLIRA_API_KEY=olira_... (create one with "
+                    "'olira keys create --scopes <the scope this command needs>')."
+                ),
+            )
+        raise AuthError(
+            "Not authenticated.",
+            remediation="Set OLIRA_API_KEY=olira_... (create one with 'olira keys create').",
+        )
+
+    # cls == "console"
+    if creds and creds.get("access_token"):
+        return Auth(token=creds["access_token"], api_server=_resolve_api_server(creds), source="login")
+    if api_key:
+        raise AuthError(
+            "This command requires browser login, not an API key.",
+            remediation="Run 'olira login' (API keys cannot manage API keys or configure clients).",
+        )
+    raise AuthError("Not logged in.", remediation="Run 'olira login'.")
+
+
+def resolve_project(args: Any) -> str | None:
+    """Resolve --project (or OLIRA_PROJECT) — shared by every /v1/* command that's project-scoped."""
+    return getattr(args, "project", None) or os.environ.get("OLIRA_PROJECT")
+
+
+def sdk_headers(auth: Auth, project: str | None = None) -> dict[str, str]:
+    """Bearer + optional X-Olira-Project header for /v1/* requests."""
+    headers = {"Authorization": f"Bearer {auth.token}"}
+    if project:
+        headers["X-Olira-Project"] = project
+    return headers
+
+
+def api_base(auth: Auth) -> str:
+    return auth.api_server.rstrip("/")
+
+
+def cmd_token(quiet: bool = False) -> CommandResult:
+    """JSON-aware variant of get_token_stdout, used by cli.py's central dispatch."""
+    from olira_cli import output
+
     creds = load_credentials()
     if not creds or not creds.get("access_token"):
-        if not quiet:
-            print("Not logged in. Run: olira login", file=sys.stderr)
-        return 1
+        raise AuthError("Not logged in.", remediation="Run 'olira login'.")
     token = creds["access_token"]
     expired = _is_token_expired(token)
     if expired and not quiet:
-        print("Warning: token has expired. Run 'olira login' to refresh.", file=sys.stderr)
-    print(token, end="")
-    return 0
+        output.warn("Warning: token has expired. Run 'olira login' to refresh.")
+    if not output.json_mode():
+        print(token, end="")
+    return CommandResult({"access_token": token, "expires_at": creds.get("expires_at", ""), "expired": expired})
 
 
 def _is_token_expired(token: str) -> bool:
@@ -88,12 +185,13 @@ def _is_token_expired(token: str) -> bool:
         return False
 
 
-def cmd_status() -> int:
-    """Print current login and token expiry. Returns 0 if logged in, 1 otherwise."""
+def cmd_status() -> CommandResult:
+    """Return current login and token expiry as a CommandResult; renders prose in human mode."""
+    from olira_cli import output
+
     creds = load_credentials()
     if not creds:
-        print("Not logged in. Run: olira login")
-        return 1
+        raise AuthError("Not logged in.", remediation="Run 'olira login'.")
     identity = creds.get("identity", "unknown")
     organization = creds.get("organization", "unknown")
     mcp_server = creds.get("mcp_server", "")
@@ -101,13 +199,23 @@ def cmd_status() -> int:
     token = creds.get("access_token", "")
     expired = _is_token_expired(token) if token else True
 
-    print(f"Logged in as {identity} ({organization})")
-    print(f"MCP Server: {mcp_server}")
-    if expires_at:
-        print(f"Token expires: {expires_at}" + (" (expired)" if expired else ""))
-    else:
-        print("Token expiry: unknown")
-    return 0
+    if not output.json_mode():
+        print(f"Logged in as {identity} ({organization})")
+        print(f"MCP Server: {mcp_server}")
+        if expires_at:
+            print(f"Token expires: {expires_at}" + (" (expired)" if expired else ""))
+        else:
+            print("Token expiry: unknown")
+
+    return CommandResult(
+        {
+            "identity": identity,
+            "organization": organization,
+            "mcp_server": mcp_server,
+            "expires_at": expires_at,
+            "expired": expired,
+        }
+    )
 
 
 def _clear_mcp_json(path: Path) -> bool:
@@ -135,12 +243,13 @@ def _clear_mcp_json(path: Path) -> bool:
         return False
 
 
-def cmd_logout() -> int:
+def cmd_logout() -> CommandResult:
     """Remove stored credentials and wipe the Olira entry from mcp.json files."""
-    if delete_credentials():
-        print("Logged out. Credentials removed.")
-    else:
-        print("Not logged in.")
+    from olira_cli import output
+
+    removed = delete_credentials()
+    if not output.json_mode():
+        print("Logged out. Credentials removed." if removed else "Not logged in.")
 
     cleaned: list[Path] = []
 
@@ -152,7 +261,8 @@ def cmd_logout() -> int:
     if home_mcp != cwd_mcp and _clear_mcp_json(home_mcp):
         cleaned.append(home_mcp)
 
-    for p in cleaned:
-        print(f"Removed olira-patient-state from {p}")
+    if not output.json_mode():
+        for p in cleaned:
+            print(f"Removed olira-patient-state from {p}")
 
-    return 0
+    return CommandResult({"removed_credentials": removed, "cleaned_mcp_json": [str(p) for p in cleaned]})
