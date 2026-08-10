@@ -68,6 +68,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="olira",
         description="Olira CLI — authenticate, manage API keys, configure MCP access, and upload historical patient data.",
+        epilog=(
+            "Driving this CLI with a coding agent? Run 'olira init agent' first — it writes "
+            "agent-specific instructions (auth model, exit codes, recipes, failure playbook) into the "
+            "current repo so the agent doesn't have to guess from --help alone."
+        ),
         parents=[common],
     )
     parser.add_argument("--version", action="version", version=f"olira {__version__}")
@@ -110,9 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     keys_revoke.add_argument("key", help="Key name or ID to revoke")
     keys_revoke.add_argument("--yes", action="store_true", help="Skip the confirmation prompt")
 
-    configure_parser = subparsers.add_parser(
-        "configure", help="Write MCP client config or agent docs", parents=[common]
-    )
+    configure_parser = subparsers.add_parser("configure", help="Write MCP client config", parents=[common])
     configure_sub = configure_parser.add_subparsers(dest="configure_command", help="configure subcommands")
 
     configure_cursor = configure_sub.add_parser("cursor", help="Write MCP server entry into mcp.json", parents=[common])
@@ -151,19 +154,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--dir", dest="codex_dir", default=None, help="Directory to write .codex/config.toml into (default: cwd)"
     )
 
-    configure_agents = configure_sub.add_parser(
-        "agents",
-        help="Write agent-facing docs (AGENTS.md, Claude skill, Cursor rule)",
+    init_parser = subparsers.add_parser("init", help="Set up agent-facing docs in the current repo", parents=[common])
+    init_sub = init_parser.add_subparsers(dest="init_command", help="init subcommands")
+
+    init_agent = init_sub.add_parser(
+        "agent",
+        help="Write AGENTS.md plus per-workflow skills/rules (olira-ingest, olira-query, olira-setup)",
         parents=[common],
     )
-    configure_agents.add_argument(
-        "--target",
-        choices=["all", "agents-md", "claude", "codex", "cursor"],
-        default="all",
-        help="Which agent doc(s) to write (default: all). 'codex' is an alias for 'agents-md' — "
-        "Codex CLI reads plain AGENTS.md natively.",
-    )
-    configure_agents.add_argument(
+    init_agent.add_argument("--claude", action="store_true", help="Write the Claude Code skills")
+    init_agent.add_argument("--cursor", action="store_true", help="Write the Cursor rules")
+    init_agent.add_argument("--codex", action="store_true", help="No-op beyond AGENTS.md — Codex CLI reads it natively")
+    init_agent.add_argument(
         "--dir",
         dest="agents_dir",
         default=None,
@@ -320,7 +322,138 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_retry.add_argument("--timeout", type=float, default=None, help="Give up watching after this many seconds")
     ingest_retry.add_argument("--project", default=None, help="Project id or slug the job belongs to")
 
+    _build_patients_parser(subparsers, common)
+    _build_state_parser(subparsers, common)
+    _build_cohorts_parser(subparsers, common)
+    _build_projects_parser(subparsers, common)
+    _build_integrations_parser(subparsers, common)
+
     return parser
+
+
+def _build_patients_parser(subparsers: Any, common: argparse.ArgumentParser) -> None:
+    patients_parser = subparsers.add_parser("patients", help="Query patients (read-only)", parents=[common])
+    patients_sub = patients_parser.add_subparsers(dest="patients_command", help="patients subcommands")
+
+    patients_list = patients_sub.add_parser("list", help="List patients for the org", parents=[common])
+    patients_list.add_argument("--limit", type=int, default=100, help="Max results, 1-100 (default: 100)")
+    patients_list.add_argument("--offset", type=int, default=0, help="Pagination offset (default: 0)")
+    patients_list.add_argument(
+        "--external-system", default=None, help="Filter by external identifier system (requires --external-value)"
+    )
+    patients_list.add_argument(
+        "--external-value", default=None, help="Filter by external identifier value (requires --external-system)"
+    )
+    patients_list.add_argument("--project", default=None, help="Project id or slug (org-wide keys only)")
+
+    patients_get = patients_sub.add_parser("get", help="Get a single patient", parents=[common])
+    patients_get.add_argument("patient_id", help="Olira-assigned patient id")
+    patients_get.add_argument("--project", default=None, help="Project id or slug (org-wide keys only)")
+
+
+def _build_state_parser(subparsers: Any, common: argparse.ArgumentParser) -> None:
+    state_parser = subparsers.add_parser("state", help="Query a patient's clinical state (read-only)", parents=[common])
+    state_sub = state_parser.add_subparsers(dest="state_command", help="state subcommands")
+
+    state_stable = state_sub.add_parser("stable", help="Get stable data modules", parents=[common])
+    state_stable.add_argument("patient_id", help="Patient id")
+    state_stable.add_argument("--modules", default=None, metavar="TYPES", help="Comma-separated module types to filter")
+
+    state_modules = state_sub.add_parser(
+        "modules", help="List event state modules, or get one by type", parents=[common]
+    )
+    state_modules.add_argument("patient_id", help="Patient id")
+    state_modules.add_argument("module_type", nargs="?", default=None, help="Module type (omit to list all)")
+
+    state_views = state_sub.add_parser("views", help="List views, or get one by type", parents=[common])
+    state_views.add_argument("patient_id", help="Patient id")
+    state_views.add_argument("view_type", nargs="?", default=None, help="View type (omit to list all)")
+
+    state_view_block = state_sub.add_parser("view-block", help="Get a single view block", parents=[common])
+    state_view_block.add_argument("patient_id", help="Patient id")
+    state_view_block.add_argument("view_type", help="View type")
+    state_view_block.add_argument("block_id", help="Block id")
+
+    state_recent = state_sub.add_parser("recent", help="Get recent TEMP entries for a view", parents=[common])
+    state_recent.add_argument("patient_id", help="Patient id")
+    state_recent.add_argument("view_type", help="View type")
+    state_recent.add_argument("--limit", type=int, default=50, help="Max entries, 1-200 (default: 50)")
+
+    state_logs = state_sub.add_parser("logs", help="Get a patient's event logs", parents=[common])
+    state_logs.add_argument("patient_id", help="Patient id")
+    state_logs.add_argument("--since", default=None, help="ISO 8601 timestamp lower bound")
+    state_logs.add_argument(
+        "--event-types", default=None, metavar="TYPES", help="Comma-separated event types to filter"
+    )
+    state_logs.add_argument("--trace-type", default=None)
+    state_logs.add_argument("--trace-id", default=None)
+    state_logs.add_argument("--limit", type=int, default=50, help="Max results, 1-200 (default: 50)")
+    state_logs.add_argument("--offset", type=int, default=0, help="Pagination offset (default: 0)")
+
+    state_events = state_sub.add_parser("events", help="Get a patient's state-update events", parents=[common])
+    state_events.add_argument("patient_id", help="Patient id")
+    state_events.add_argument("--since", default=None, help="ISO 8601 timestamp lower bound")
+    state_events.add_argument("--log-type", default=None)
+    state_events.add_argument("--trace-type", default=None)
+    state_events.add_argument("--trace-id", default=None)
+    state_events.add_argument("--status", default="complete", help="Event status filter (default: complete)")
+    state_events.add_argument("--limit", type=int, default=50, help="Max results, 1-200 (default: 50)")
+
+    state_memories = state_sub.add_parser("memories", help="Search a patient's memories", parents=[common])
+    state_memories.add_argument("patient_id", help="Patient id")
+    state_memories.add_argument("--query", default=None, help="Case-insensitive text search")
+    state_memories.add_argument("--limit", type=int, default=100, help="Max results, 1-500 (default: 100)")
+
+
+def _build_cohorts_parser(subparsers: Any, common: argparse.ArgumentParser) -> None:
+    cohorts_parser = subparsers.add_parser("cohorts", help="Query cohorts (read-only)", parents=[common])
+    cohorts_sub = cohorts_parser.add_subparsers(dest="cohorts_command", help="cohorts subcommands")
+
+    cohorts_list = cohorts_sub.add_parser("list", help="List cohorts", parents=[common])
+    cohorts_list.add_argument("--project", default=None, help="Project id or slug (org-wide keys only)")
+
+    cohorts_get = cohorts_sub.add_parser("get", help="Get a single cohort", parents=[common])
+    cohorts_get.add_argument("cohort_id", help="Cohort id")
+    cohorts_get.add_argument("--project", default=None, help="Project id or slug (org-wide keys only)")
+
+    cohorts_templates = cohorts_sub.add_parser(
+        "templates", help="List a cohort's assigned summary templates", parents=[common]
+    )
+    cohorts_templates.add_argument("cohort_id", help="Cohort id")
+    cohorts_templates.add_argument("--project", default=None, help="Project id or slug (org-wide keys only)")
+
+
+def _build_projects_parser(subparsers: Any, common: argparse.ArgumentParser) -> None:
+    projects_parser = subparsers.add_parser(
+        "projects", help="Query projects (read-only; org-wide key required)", parents=[common]
+    )
+    projects_sub = projects_parser.add_subparsers(dest="projects_command", help="projects subcommands")
+
+    projects_sub.add_parser("list", help="List projects for the org", parents=[common])
+
+    projects_get = projects_sub.add_parser("get", help="Get a single project", parents=[common])
+    projects_get.add_argument("project_id", metavar="id_or_slug", help="Project id or slug")
+
+
+def _build_integrations_parser(subparsers: Any, common: argparse.ArgumentParser) -> None:
+    integrations_parser = subparsers.add_parser(
+        "integrations", help="Query EHR integrations (read-only)", parents=[common]
+    )
+    integrations_sub = integrations_parser.add_subparsers(dest="integrations_command", help="integrations subcommands")
+
+    integrations_sub.add_parser("catalog", help="List available EHR providers", parents=[common])
+    integrations_sub.add_parser("list", help="List the org's connected integrations", parents=[common])
+
+    integrations_get = integrations_sub.add_parser("get", help="Get a single integration", parents=[common])
+    integrations_get.add_argument("integration_id", help="Integration id")
+
+    integrations_dp = integrations_sub.add_parser(
+        "data-points", help="List an integration's data points", parents=[common]
+    )
+    integrations_dp.add_argument("integration_id", help="Integration id")
+    integrations_dp.add_argument(
+        "--catalog", action="store_true", help="Show available data points instead of subscribed ones"
+    )
 
 
 _VALID_ENVS = {"dev", "stage", "prod", "local"}
@@ -332,7 +465,13 @@ def _command_name(args: argparse.Namespace) -> str:
     sub = (
         getattr(args, "keys_command", None)
         or getattr(args, "configure_command", None)
+        or getattr(args, "init_command", None)
         or getattr(args, "ingest_command", None)
+        or getattr(args, "patients_command", None)
+        or getattr(args, "state_command", None)
+        or getattr(args, "cohorts_command", None)
+        or getattr(args, "projects_command", None)
+        or getattr(args, "integrations_command", None)
     )
     return f"{command}.{sub}" if sub else command
 
@@ -356,12 +495,24 @@ def _dispatch(args: argparse.Namespace) -> CommandResult:
         return _cmd_keys(args)
     if args.command == "configure":
         return _cmd_configure(args)
+    if args.command == "init":
+        return _cmd_init(args)
     if args.command == "validate":
         from olira_cli.validate import cmd_validate
 
         return cmd_validate(args)
     if args.command == "ingest":
         return _cmd_ingest(args)
+    if args.command == "patients":
+        return _cmd_patients(args)
+    if args.command == "state":
+        return _cmd_state(args)
+    if args.command == "cohorts":
+        return _cmd_cohorts(args)
+    if args.command == "projects":
+        return _cmd_projects(args)
+    if args.command == "integrations":
+        return _cmd_integrations(args)
     raise CliError("Unknown command.", code="USAGE", exit_code=2)
 
 
@@ -389,10 +540,6 @@ def _cmd_keys(args: argparse.Namespace) -> CommandResult:
 
 def _cmd_configure(args: argparse.Namespace) -> CommandResult:
     sub = getattr(args, "configure_command", None)
-    if sub == "agents":
-        from olira_cli.agent_docs import cmd_configure_agents
-
-        return cmd_configure_agents(args)
     if sub == "cursor":
         from olira_cli.api import cmd_configure_cursor
 
@@ -405,7 +552,16 @@ def _cmd_configure(args: argparse.Namespace) -> CommandResult:
         from olira_cli.api import cmd_configure_codex
 
         return cmd_configure_codex(args)
-    raise CliError("Usage: olira configure {cursor|claude|codex|agents}", code="USAGE", exit_code=2)
+    raise CliError("Usage: olira configure {cursor|claude|codex}", code="USAGE", exit_code=2)
+
+
+def _cmd_init(args: argparse.Namespace) -> CommandResult:
+    sub = getattr(args, "init_command", None)
+    if sub == "agent":
+        from olira_cli.agent_docs import cmd_init_agent
+
+        return cmd_init_agent(args)
+    raise CliError("Usage: olira init agent", code="USAGE", exit_code=2)
 
 
 def _cmd_ingest(args: argparse.Namespace) -> CommandResult:
@@ -426,6 +582,79 @@ def _cmd_ingest(args: argparse.Namespace) -> CommandResult:
             "Usage: olira ingest {upload|list|status|confirm|cancel|retry-backfill}", code="USAGE", exit_code=2
         )
 
+    return dispatch[sub](args)
+
+
+def _cmd_patients(args: argparse.Namespace) -> CommandResult:
+    from olira_cli.reads import cmd_patients_get, cmd_patients_list
+
+    dispatch = {"list": cmd_patients_list, "get": cmd_patients_get}
+    sub = getattr(args, "patients_command", None)
+    if sub not in dispatch:
+        raise CliError("Usage: olira patients {list|get}", code="USAGE", exit_code=2)
+    return dispatch[sub](args)
+
+
+def _cmd_state(args: argparse.Namespace) -> CommandResult:
+    from olira_cli import state
+
+    dispatch = {
+        "stable": state.cmd_stable,
+        "modules": state.cmd_modules,
+        "views": state.cmd_views,
+        "view-block": state.cmd_view_block,
+        "recent": state.cmd_recent,
+        "logs": state.cmd_logs,
+        "events": state.cmd_events,
+        "memories": state.cmd_memories,
+    }
+    sub = getattr(args, "state_command", None)
+    if sub not in dispatch:
+        raise CliError(
+            "Usage: olira state {stable|modules|views|view-block|recent|logs|events|memories}",
+            code="USAGE",
+            exit_code=2,
+        )
+    return dispatch[sub](args)
+
+
+def _cmd_cohorts(args: argparse.Namespace) -> CommandResult:
+    from olira_cli.reads import cmd_cohorts_get, cmd_cohorts_list, cmd_cohorts_templates
+
+    dispatch = {"list": cmd_cohorts_list, "get": cmd_cohorts_get, "templates": cmd_cohorts_templates}
+    sub = getattr(args, "cohorts_command", None)
+    if sub not in dispatch:
+        raise CliError("Usage: olira cohorts {list|get|templates}", code="USAGE", exit_code=2)
+    return dispatch[sub](args)
+
+
+def _cmd_projects(args: argparse.Namespace) -> CommandResult:
+    from olira_cli.reads import cmd_projects_get, cmd_projects_list
+
+    dispatch = {"list": cmd_projects_list, "get": cmd_projects_get}
+    sub = getattr(args, "projects_command", None)
+    if sub not in dispatch:
+        raise CliError("Usage: olira projects {list|get}", code="USAGE", exit_code=2)
+    return dispatch[sub](args)
+
+
+def _cmd_integrations(args: argparse.Namespace) -> CommandResult:
+    from olira_cli.reads import (
+        cmd_integrations_catalog,
+        cmd_integrations_data_points,
+        cmd_integrations_get,
+        cmd_integrations_list,
+    )
+
+    dispatch = {
+        "catalog": cmd_integrations_catalog,
+        "list": cmd_integrations_list,
+        "get": cmd_integrations_get,
+        "data-points": cmd_integrations_data_points,
+    }
+    sub = getattr(args, "integrations_command", None)
+    if sub not in dispatch:
+        raise CliError("Usage: olira integrations {catalog|list|get|data-points}", code="USAGE", exit_code=2)
     return dispatch[sub](args)
 
 

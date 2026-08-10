@@ -90,8 +90,8 @@ def test_configure_codex_preserves_surrounding_toml_content(run_cli, no_creds, t
     assert 'model = "gpt-5"' in content2
 
 
-def test_configure_agents_codex_target_is_agents_md_alias(run_cli, tmp_path):
-    code, out, _ = run_cli(["--json", "configure", "agents", "--dir", str(tmp_path), "--target", "codex"])
+def test_init_agent_codex_only_writes_agents_md(run_cli, tmp_path):
+    code, out, _ = run_cli(["--json", "init", "agent", "--dir", str(tmp_path), "--codex"])
     assert code == 0
     env = json_envelope(out)
     paths = {f["path"] for f in env["data"]["files"]}

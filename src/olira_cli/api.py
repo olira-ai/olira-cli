@@ -327,6 +327,10 @@ def cmd_configure_cursor(args: Any) -> CommandResult:
         print("When your token expires, re-run: olira configure cursor")
         print("Tip: for a non-expiring credential, create an API key and use it instead:")
         print('  olira keys create --name "Cursor"')
+        print("")
+        print("This connects Cursor to Olira's MCP server. To also teach a coding agent")
+        print("how to drive the rest of this CLI (ingest, validate, query), run:")
+        print("  olira init agent")
 
     return CommandResult({"config_path": str(config_path), "mcp_server": mcp_server, "action": action})
 
@@ -361,6 +365,10 @@ def cmd_configure_claude(args: Any) -> CommandResult:
         print("mcp:patient-state before Claude Code connects to this server:")
         print('  olira keys create --name "Claude Code" --scopes mcp:patient-state')
         print(f"  export {api_key_env}=olira_...")
+        print("")
+        print("This connects Claude Code to Olira's MCP server. To also teach a coding")
+        print("agent how to drive the rest of this CLI (ingest, validate, query), run:")
+        print("  olira init agent")
 
     return CommandResult({"config_path": str(config_path), "mcp_server": mcp_server, "action": action})
 
@@ -404,5 +412,9 @@ def cmd_configure_codex(args: Any) -> CommandResult:
         print("mcp:patient-state before Codex connects to this server:")
         print('  olira keys create --name "Codex" --scopes mcp:patient-state')
         print(f"  export {api_key_env}=olira_...")
+        print("")
+        print("This connects Codex to Olira's MCP server. To also teach a coding agent")
+        print("how to drive the rest of this CLI (ingest, validate, query), run:")
+        print("  olira init agent")
 
     return CommandResult({"config_path": str(config_path), "mcp_server": mcp_server, "action": action})

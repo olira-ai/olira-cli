@@ -7,7 +7,7 @@ Full command reference: [docs.olira.ai/cli](https://docs.olira.ai/cli)
 > **Using Cursor, Claude Code, Codex, or another coding agent?** This CLI is
 > built for that: every command is safe to run headlessly (nothing ever
 > hangs on a prompt) and supports `--json` output. Run
-> `olira configure agents` once in your repo and your agent will know how to
+> `olira init agent` once in your repo and your agent will know how to
 > drive it correctly — see [Using the CLI from a coding
 > agent](#using-the-cli-from-a-coding-agent) below.
 
@@ -105,12 +105,17 @@ with an API key via `OLIRA_API_KEY`, not by logging in.
 | `olira configure cursor` | Write the MCP server entry into `mcp.json` with your current login token. Prefers `.cursor/` in the current directory. |
 | `olira configure claude` | Write a project-scoped MCP server entry into `.mcp.json` for Claude Code. No login needed — references an env var, never a literal token. |
 | `olira configure codex` | Same, for Codex CLI (`.codex/config.toml`). |
-| `olira configure agents` | Write agent-facing docs (`AGENTS.md`, a Claude Code skill, a Cursor rule) into the current repo. |
+| `olira init agent` | Write agent-facing docs into the current repo: `AGENTS.md` plus three focused Claude Code skills / Cursor rules (ingest, query, setup). |
 | `olira keys create` | Create an API key (interactive wizard). Use `--name` and `--scopes` to skip prompts. |
 | `olira keys list` | List API keys for your organization, including their scopes. |
 | `olira keys revoke <name-or-id>` | Permanently revoke an API key. Use `--yes` to skip the confirmation prompt. |
 | `olira validate <file>.jsonl` | Validate a historical-data file locally before uploading. |
 | `olira ingest upload <file>.jsonl` | Upload a validated file and create an ingestion job. |
+| `olira patients list` / `get <id>` | Query patients (read-only). |
+| `olira state stable\|modules\|views\|logs\|events\|memories <patient_id>` | Query a patient's clinical state (read-only). |
+| `olira cohorts list` / `get <id>` / `templates <id>` | Query cohorts (read-only). |
+| `olira projects list` / `get <id_or_slug>` | Query projects (read-only; org-wide key). |
+| `olira integrations catalog\|list\|get\|data-points` | Query EHR integrations (read-only). |
 
 Every command accepts `--json` for machine-readable output — see
 [Using the CLI from a coding agent](#using-the-cli-from-a-coding-agent) and
@@ -126,16 +131,18 @@ commands for them:
 manage keys, read job status) — run once, in the repo the agent works in:
 
 ```bash
-olira configure agents
+olira init agent
 ```
 
-This writes `AGENTS.md`, `.claude/skills/olira/SKILL.md`, and
-`.cursor/rules/olira.mdc` describing how to authenticate (`OLIRA_API_KEY`,
-not `olira login`), the `--json` envelope and exit codes, the ingestion job
-state machine, the JSONL schema, and a failure playbook — everything an
-agent needs to drive `olira ingest`/`olira validate` correctly without
-further instructions. Safe to re-run; it updates in place rather than
-duplicating content.
+This writes `AGENTS.md` plus **three focused skills** — `olira-ingest`,
+`olira-query`, `olira-setup` — as `.claude/skills/<name>/SKILL.md` and
+`.cursor/rules/<name>.mdc`. Split by workflow rather than one monolith
+because the ingestion state machine is genuinely complex and a "list
+patients" task shouldn't have to load it: each skill covers only its own
+commands (auth, exit codes, and the JSON envelope — needed by everything —
+live once in `AGENTS.md`, which most agents load unconditionally). Safe to
+re-run; it updates in place rather than duplicating content, and cleans up
+the old single-skill layout if it finds one from an earlier CLI version.
 
 **Connect your agent directly to the Olira MCP server** (so it can query
 patient state as a tool, not by shelling out to the CLI):
@@ -179,12 +186,22 @@ Tokens expire after ~24 hours. Re-run `olira login` to refresh; if you still hav
 
 API keys never expire and are not stored locally — they live in the platform and can be revoked with `olira keys revoke`.
 
-Two credential types exist and are not interchangeable: `olira ingest *` and
-`olira validate --check-org` need an API key (`OLIRA_API_KEY` or `--api-key`);
-`olira keys *` and `olira configure cursor` need a browser login instead.
-`olira configure claude`/`olira configure codex` need neither — they write a
-config that references an env var without ever touching a real credential.
-See the [full reference](https://docs.olira.ai/cli) for details.
+Two credential types exist and are not interchangeable: `olira ingest *`,
+`olira validate --check-org`, and the read-only query commands (`patients`,
+`state`, `cohorts`, `projects`, `integrations`) all need an API key
+(`OLIRA_API_KEY` or `--api-key`); `olira keys *` and `olira configure cursor`
+need a browser login instead. `olira configure claude`/`olira configure
+codex` need neither — they write a config that references an env var
+without ever touching a real credential. See the [full
+reference](https://docs.olira.ai/cli) for details.
+
+## Examples
+
+The [`examples/`](examples/) folder has runnable end-to-end scripts
+(ingest a file, query a patient's clinical state, check EHR integration
+health) and [`examples/using-olira-with-agents.md`](examples/using-olira-with-agents.md) —
+a guide to setting up a coding agent (Cursor, Claude Code, Codex, or any
+other) to drive this CLI on your behalf.
 
 ## Development
 

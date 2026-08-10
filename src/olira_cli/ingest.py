@@ -14,7 +14,6 @@ key) — /v1/* routes reject browser-login JWTs.
 
 from __future__ import annotations
 
-import os
 import sys
 import time
 from typing import Any
@@ -22,7 +21,7 @@ from typing import Any
 import httpx
 
 from olira_cli import http, output
-from olira_cli.credentials import Auth, resolve_auth
+from olira_cli.credentials import Auth, api_base, resolve_auth, resolve_project, sdk_headers
 from olira_cli.errors import CliError, CommandResult, StateError, from_http_error, require_tty
 
 _TERMINAL = {"completed", "completed_with_errors", "cancelled", "failed"}
@@ -48,21 +47,6 @@ _STATUS_LABELS: dict[str, str] = {
 }
 
 
-def _project(args: Any) -> str | None:
-    return getattr(args, "project", None) or os.environ.get("OLIRA_PROJECT")
-
-
-def _headers(auth: Auth, project: str | None) -> dict[str, str]:
-    h = {"Authorization": f"Bearer {auth.token}"}
-    if project:
-        h["X-Olira-Project"] = project
-    return h
-
-
-def _api(auth: Auth) -> str:
-    return auth.api_server.rstrip("/")
-
-
 def _fmt_status(status: str) -> str:
     return _STATUS_LABELS.get(status, status)
 
@@ -83,7 +67,7 @@ def _print_job_row(j: dict[str, Any]) -> None:
 
 
 def _fetch_job(client: httpx.Client, auth: Auth, job_id: str, project: str | None) -> dict[str, Any]:
-    r = client.get(f"{_api(auth)}/v1/ingestion/jobs/{job_id}", headers=_headers(auth, project), timeout=30)
+    r = client.get(f"{api_base(auth)}/v1/ingestion/jobs/{job_id}", headers=sdk_headers(auth, project), timeout=30)
     r.raise_for_status()
     return r.json()
 
@@ -181,9 +165,9 @@ def _confirm_job(
         patch["skip_backfill"] = True
     if patch:
         r = client.patch(
-            f"{_api(auth)}/v1/ingestion/jobs/{job_id}",
+            f"{api_base(auth)}/v1/ingestion/jobs/{job_id}",
             json=patch,
-            headers=_headers(auth, project),
+            headers=sdk_headers(auth, project),
         )
         r.raise_for_status()
         if summary_types:
@@ -195,17 +179,17 @@ def _confirm_job(
     if initialize_missing_templates:
         confirm_body["initialize_missing_templates"] = True
     r = client.post(
-        f"{_api(auth)}/v1/ingestion/jobs/{job_id}/confirm",
+        f"{api_base(auth)}/v1/ingestion/jobs/{job_id}/confirm",
         json=confirm_body,
-        headers=_headers(auth, project),
+        headers=sdk_headers(auth, project),
     )
     r.raise_for_status()
 
 
 def _cancel_job(client: httpx.Client, auth: Auth, job_id: str, project: str | None) -> None:
     r = client.post(
-        f"{_api(auth)}/v1/ingestion/jobs/{job_id}/cancel",
-        headers=_headers(auth, project),
+        f"{api_base(auth)}/v1/ingestion/jobs/{job_id}/cancel",
+        headers=sdk_headers(auth, project),
     )
     r.raise_for_status()
 
@@ -280,14 +264,14 @@ def cmd_upload(args: Any) -> CommandResult:
         raise CliError("File must have a .jsonl extension.", code="INVALID_FILE", exit_code=5)
 
     auth = resolve_auth("sdk", getattr(args, "api_key", None))
-    project = _project(args)
+    project = resolve_project(args)
     idem_key = args.idempotency_key or f"cli-{uuid.uuid4().hex[:12]}"
     require_confirm = not args.no_confirm
 
     output.info(f"Uploading {path.name} ({path.stat().st_size / 1024:.1f} KB)…")
 
     with http.client() as client:
-        r = client.post(f"{_api(auth)}/v1/ingestion/upload-url", headers=_headers(auth, project))
+        r = client.post(f"{api_base(auth)}/v1/ingestion/upload-url", headers=sdk_headers(auth, project))
         r.raise_for_status()
         url_data = r.json()
         upload_url = url_data["upload_url"]
@@ -318,7 +302,7 @@ def cmd_upload(args: Any) -> CommandResult:
             body["summary_types"] = args.summary_types
         if getattr(args, "no_backfill", False):
             body["skip_backfill"] = True
-        r = client.post(f"{_api(auth)}/v1/ingestion/jobs", json=body, headers=_headers(auth, project))
+        r = client.post(f"{api_base(auth)}/v1/ingestion/jobs", json=body, headers=sdk_headers(auth, project))
         r.raise_for_status()
         job = r.json()
         job_id = job["job_id"]
@@ -340,7 +324,7 @@ def cmd_upload(args: Any) -> CommandResult:
 def cmd_list(args: Any) -> CommandResult:
     """List ingestion jobs for the org."""
     auth = resolve_auth("sdk", getattr(args, "api_key", None))
-    project = _project(args)
+    project = resolve_project(args)
     page = getattr(args, "page", 1)
     page_size = getattr(args, "page_size", 10)
     status_filter = getattr(args, "status", None)
@@ -349,7 +333,7 @@ def cmd_list(args: Any) -> CommandResult:
         params: dict[str, Any] = {"page": page, "page_size": page_size}
         if status_filter:
             params["status"] = status_filter
-        r = client.get(f"{_api(auth)}/v1/ingestion/jobs", params=params, headers=_headers(auth, project))
+        r = client.get(f"{api_base(auth)}/v1/ingestion/jobs", params=params, headers=sdk_headers(auth, project))
         r.raise_for_status()
         data = r.json()
 
@@ -378,7 +362,7 @@ def cmd_list(args: Any) -> CommandResult:
 def cmd_status(args: Any) -> CommandResult:
     """Show status for a single job. Strictly read-only — never prompts, never mutates."""
     auth = resolve_auth("sdk", getattr(args, "api_key", None))
-    project = _project(args)
+    project = resolve_project(args)
 
     if args.watch:
         return _watch_job(
@@ -399,7 +383,7 @@ def cmd_status(args: Any) -> CommandResult:
 def cmd_confirm(args: Any) -> CommandResult:
     """Confirm a job at AWAITING_CONFIRMATION to start Phase 2."""
     auth = resolve_auth("sdk", getattr(args, "api_key", None))
-    project = _project(args)
+    project = resolve_project(args)
 
     with http.client() as client:
         job = _fetch_job(client, auth, args.job_id, project)
@@ -440,7 +424,7 @@ def cmd_confirm(args: Any) -> CommandResult:
 def cmd_cancel(args: Any) -> CommandResult:
     """Cancel an ingestion job."""
     auth = resolve_auth("sdk", getattr(args, "api_key", None))
-    project = _project(args)
+    project = resolve_project(args)
 
     if not args.yes:
         require_tty("Cancelling a job", "--yes")
@@ -451,7 +435,7 @@ def cmd_cancel(args: Any) -> CommandResult:
             return CommandResult({"job_id": args.job_id, "cancelled": False})
 
     with http.client() as client:
-        r = client.post(f"{_api(auth)}/v1/ingestion/jobs/{args.job_id}/cancel", headers=_headers(auth, project))
+        r = client.post(f"{api_base(auth)}/v1/ingestion/jobs/{args.job_id}/cancel", headers=sdk_headers(auth, project))
         r.raise_for_status()
 
     if not output.json_mode():
@@ -462,10 +446,12 @@ def cmd_cancel(args: Any) -> CommandResult:
 def cmd_retry_backfill(args: Any) -> CommandResult:
     """Retry view backfill on a COMPLETED_WITH_ERRORS job."""
     auth = resolve_auth("sdk", getattr(args, "api_key", None))
-    project = _project(args)
+    project = resolve_project(args)
 
     with http.client() as client:
-        r = client.post(f"{_api(auth)}/v1/ingestion/jobs/{args.job_id}/retry-backfill", headers=_headers(auth, project))
+        r = client.post(
+            f"{api_base(auth)}/v1/ingestion/jobs/{args.job_id}/retry-backfill", headers=sdk_headers(auth, project)
+        )
         r.raise_for_status()
 
     if not output.json_mode():

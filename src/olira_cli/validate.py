@@ -14,14 +14,13 @@ Prints a summary; raises ValidationError (exit 5) if errors were found.
 from __future__ import annotations
 
 import json
-import os
 import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from olira_cli import http, output
-from olira_cli.credentials import resolve_auth
+from olira_cli.credentials import api_base, resolve_auth, resolve_project, sdk_headers
 from olira_cli.errors import CliError, CommandResult, ValidationError
 
 KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
@@ -302,34 +301,32 @@ def _render_summary(
 def _fetch_org_patient_ids(args: Any) -> set[str]:
     """Fetch external_identifiers from all org patients via the SDK API."""
     auth = resolve_auth("sdk", getattr(args, "api_key", None))
-    project = getattr(args, "project", None) or os.environ.get("OLIRA_PROJECT")
-    headers = {"Authorization": f"Bearer {auth.token}"}
-    if project:
-        headers["X-Olira-Project"] = project
+    project = resolve_project(args)
+    headers = sdk_headers(auth, project)
 
     ids: set[str] = set()
 
     output.info("  Fetching org patients for cross-check…")
-    page = 1
+    offset = 0
+    limit = 100
     with http.client() as client:
         while True:
             r = client.get(
-                f"{auth.api_server.rstrip('/')}/v1/patients",
-                params={"page": page, "page_size": 100},
+                f"{api_base(auth)}/v1/patients",
+                params={"limit": limit, "offset": offset},
                 headers=headers,
             )
             r.raise_for_status()
             data = r.json()
-            patients = data.get("patients") or data.get("data") or []
+            patients = data.get("patients") or []
             for p in patients:
                 for ext in p.get("external_identifiers") or []:
                     if ext.get("value"):
                         ids.add(str(ext["value"]))
                 if p.get("id"):
                     ids.add(str(p["id"]))
-            total = data.get("total", 0)
-            if page * 100 >= total:
+            if not data.get("has_more"):
                 break
-            page += 1
+            offset += limit
     output.info(f"  Found {len(ids)} patient identifier(s) in org.\n")
     return ids

@@ -127,6 +127,23 @@ def resolve_auth(cls: Literal["sdk", "console"], api_key_flag: str | None = None
     raise AuthError("Not logged in.", remediation="Run 'olira login'.")
 
 
+def resolve_project(args: Any) -> str | None:
+    """Resolve --project (or OLIRA_PROJECT) — shared by every /v1/* command that's project-scoped."""
+    return getattr(args, "project", None) or os.environ.get("OLIRA_PROJECT")
+
+
+def sdk_headers(auth: Auth, project: str | None = None) -> dict[str, str]:
+    """Bearer + optional X-Olira-Project header for /v1/* requests."""
+    headers = {"Authorization": f"Bearer {auth.token}"}
+    if project:
+        headers["X-Olira-Project"] = project
+    return headers
+
+
+def api_base(auth: Auth) -> str:
+    return auth.api_server.rstrip("/")
+
+
 def cmd_token(quiet: bool = False) -> CommandResult:
     """JSON-aware variant of get_token_stdout, used by cli.py's central dispatch."""
     from olira_cli import output
