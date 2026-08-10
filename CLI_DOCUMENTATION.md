@@ -1,6 +1,6 @@
 > **Maintained by:** Olira Engineering  
 > **Published at:** [docs.olira.ai](https://docs.olira.ai) → CLI tab  
-> **Version:** `1.1.1`
+> **Version:** `1.2.0`
 
 # Olira CLI
 
@@ -70,6 +70,52 @@ olira validate patients_and_logs.jsonl
 olira ingest upload patients_and_logs.jsonl --watch
 ```
 
+## Non-interactive & agent use
+
+Every command works headlessly — no command will hang waiting on a prompt.
+This is also what powers `olira configure agents` (below).
+
+- Pass **`--json`** (root or subcommand position, e.g. `olira --json ingest list` or `olira ingest list --json`) for a single JSON envelope on stdout: `{"ok": true|false, "command": "...", "cli_version": "...", "data": {...} | "error": {...}, "warnings": [...]}`. `--watch` additionally streams NDJSON `progress`/`heartbeat` events before the final envelope line.
+- Auth for scripts/CI/agents: set **`OLIRA_API_KEY=olira_...`** (or pass `--api-key`) instead of `olira login`. See [Environment variables](#environment-variables) and [Credential types](#credential-types) below — `ingest`/`validate --check-org` need an API key; `keys`/`configure cursor` need a browser login and cannot use one.
+- Every place that would otherwise prompt has a flag that answers it up front: `--yes` (`keys revoke`, `ingest cancel`), `--name`/`--scopes` (`keys create`), `--dir` (`configure cursor`), `--init-templates`/`--no-backfill` (`ingest confirm`). Without the flag and without a TTY, the command fails fast (exit `6`, `PROMPT_REQUIRED`) naming the flag to add — it never hangs.
+- Pass **`--timeout SECONDS`** with `--watch` on long-running ingest commands; without it, watching a job that never reaches a terminal state polls forever.
+- **`olira configure agents`** writes `AGENTS.md`, a Claude Code skill, and a Cursor rule into the current repo describing all of the above plus the ingestion state machine, JSONL schema, and a failure playbook — point a coding agent at a repo with these files and it can drive the CLI correctly without additional instructions.
+
+### Environment variables
+
+| Variable          | Used by                              | Purpose                                                                 |
+| ------------------ | ------------------------------------- | ------------------------------------------------------------------------ |
+| `OLIRA_API_KEY`    | `ingest *`, `validate --check-org`    | API key, in place of `--api-key` or an interactive login                |
+| `OLIRA_API_URL`    | any command resolving credentials     | Override the app-api base URL (rarely needed; normally derived)         |
+| `OLIRA_PROJECT`    | `ingest *`, `validate --check-org`    | Default `--project` when targeting a non-default project (org-wide keys)|
+| `NO_COLOR`         | `validate`                            | Disable ANSI colors in human-mode output                                |
+
+### Credential types
+
+Two credential types exist and are **not** interchangeable:
+
+| Command group                              | Needs                                   | Will NOT accept                     |
+| ------------------------------------------- | ---------------------------------------- | ------------------------------------ |
+| `olira ingest *`, `olira validate --check-org` | An API key (`OLIRA_API_KEY` / `--api-key`) | A browser-login session               |
+| `olira keys *`, `olira configure cursor`    | A browser login (`olira login`)          | An API key                            |
+
+Using the wrong one fails fast with a specific error (exit `3`) rather than
+an opaque 401 from the server.
+
+### JSON envelope
+
+```json
+{"ok": true, "command": "ingest.status", "cli_version": "1.2.0", "data": {"job_id": "...", "status": "replaying", "...": "..."}, "warnings": []}
+```
+
+```json
+{"ok": false, "command": "keys.revoke", "cli_version": "1.2.0",
+ "error": {"code": "PROMPT_REQUIRED", "message": "Revoking a key requires an interactive terminal.",
+           "remediation": "Re-run with --yes.", "http_status": null, "details": {}}}
+```
+
+`data` mirrors the underlying API response — there is no separate JSON schema to learn beyond what's documented per command below.
+
 ## Commands
 
 ### `olira login`
@@ -113,17 +159,65 @@ List API keys for your organization
 
 Permanently revoke an API key
 
-| Flag  | Description              |
-| ----- | ------------------------ |
-| `key` | Key name or ID to revoke |
+| Flag    | Description                              |
+| ------- | ----------------------------------------- |
+| `key`   | Key name or ID to revoke                  |
+| `--yes` | Skip the interactive confirmation prompt  |
 
-### `olira configure`
+### `olira configure cursor`
 
-Write MCP client config
+Write the MCP server entry into `mcp.json`. Prefers `.cursor/` in the current directory, falling back to `~/.cursor/`. Requires a browser login (`olira login`) — the current session token is embedded directly in `mcp.json`.
 
-| Flag     | Description                                          |
-| -------- | ---------------------------------------------------- |
-| `client` | Target client (cursor; claude-code planned) `cursor` |
+| Flag    | Description                                                                  |
+| ------- | ----------------------------------------------------------------------------- |
+| `--dir` | Path to the `.cursor` directory to write to (skips discovery and any prompt) |
+
+### `olira configure claude` / `olira configure codex`
+
+Write a project-scoped MCP server entry for Claude Code (`.mcp.json`) or
+Codex CLI (`.codex/config.toml`). Unlike `configure cursor`, **neither
+requires auth to run** and **neither ever writes a secret to disk** — both
+of these config files are meant to be committed to git and shared with a
+team, so the `Authorization` header (Claude) / `bearer_token_env_var`
+(Codex) references an environment variable instead of a literal token. The
+human still needs to export that variable with a real API key scoped to
+`mcp:patient-state` before the MCP connection will authenticate.
+
+```bash
+olira configure claude                       # writes .mcp.json, referencing OLIRA_API_KEY
+olira configure codex                        # writes .codex/config.toml, same pattern
+olira configure claude --api-key-env MY_TOKEN # reference a different env var name
+```
+
+| Flag             | Description                                                                     |
+| ---------------- | --------------------------------------------------------------------------------- |
+| `--api-key-env`  | Env var name the client should read the bearer token from (default: `OLIRA_API_KEY`) |
+| `--dir`          | Directory to write into (default: current directory)                             |
+
+Both merge into the existing config file without disturbing other configured
+MCP servers or unrelated settings, and are idempotent — re-running with the
+same arguments reports `unchanged`.
+
+### `olira configure agents`
+
+Write agent-facing docs into the current repo — `AGENTS.md`, a Claude Code
+skill (`.claude/skills/olira/SKILL.md`), and a Cursor rule
+(`.cursor/rules/olira.mdc`) — covering auth, the JSON envelope and exit
+codes, the ingestion state machine, the JSONL schema, copy-paste recipes,
+and a failure playbook. Idempotent: re-running updates a managed block in
+`AGENTS.md` and overwrites the other two files only if their content
+changed; never prompts.
+
+```bash
+olira configure agents
+olira configure agents --target claude
+olira configure agents --dir ./my-integration
+```
+
+| Flag       | Description                                                                    |
+| ---------- | -------------------------------------------------------------------------------- |
+| `--target` | Which doc(s) to write: `all` (default), `agents-md`, `claude`, or `cursor`       |
+| `--dir`    | Directory to write into (default: current directory)                            |
 
 ---
 
@@ -132,20 +226,22 @@ Write MCP client config
 Validate a `.jsonl` file locally before uploading. Checks every record for
 correct structure, known log types, PII in `patient_id`, and whether log
 records reference patients that appear earlier in the file (or already exist in
-your org when `--check-org` is passed). Exits `0` if clean, `1` if any errors
-are found.
+your org when `--check-org` is passed). Exits `0` if clean, `5` if any errors
+are found (structured under `error.details.errors` in `--json` mode).
 
 ```bash
 olira validate data.jsonl
-olira validate data.jsonl --check-org          # cross-check patient IDs against live org
+olira validate data.jsonl --check-org          # cross-check patient IDs against live org (needs an API key)
 olira validate data.jsonl --skip-order-check   # skip the patient-before-log ordering check
+olira validate data.jsonl --json               # machine-readable output
 ```
 
-| Flag                 | Description                                                                                |
-| -------------------- | ------------------------------------------------------------------------------------------ |
-| `file`               | Path to the `.jsonl` file to validate                                                      |
-| `--check-org`        | Fetch your org's patients and warn if any log `patient_id` is not found _(requires login)_ |
-| `--skip-order-check` | Skip the check that patients are declared before logs that reference them                  |
+| Flag                 | Description                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| `file`               | Path to the `.jsonl` file to validate                                                            |
+| `--check-org`        | Fetch your org's patients and warn if any log `patient_id` is not found _(requires an API key)_ |
+| `--skip-order-check` | Skip the check that patients are declared before logs that reference them                        |
+| `--project`          | Project id or slug to scope `--check-org` against (org-wide keys only; default: org's default project) |
 
 **What is checked:**
 
@@ -164,8 +260,11 @@ olira validate data.jsonl --skip-order-check   # skip the patient-before-log ord
 
 ### `olira ingest`
 
-Upload and manage historical data ingestion jobs. All subcommands require a
-key with `sdk:historical-ingest` scope (or an active console session).
+Upload and manage historical data ingestion jobs. All subcommands require an
+API key with `sdk:historical-ingest` scope (`OLIRA_API_KEY` or `--api-key`) —
+a browser login (`olira login`) does not work for these commands. All
+subcommands also accept `--project` (or `OLIRA_PROJECT`) to target a
+non-default project when using an org-wide key.
 
 #### Missing view template slots
 
@@ -209,8 +308,10 @@ olira ingest upload data.jsonl --watch --init-templates
 | `--no-backfill`     | Skip Stage 5 (AI view generation) after graph replay. Data is fully imported and queryable but Console views are not populated.                                                                    |
 | `--summary-types`   | view types to generate (space-separated, e.g. `emotional_state_snapshot`)                                                                                                                          |
 | `--idempotency-key` | Unique key for this upload. Resubmitting the same key while a job is active returns the existing job instead of creating a new one. Auto-generated if omitted.                                     |
-| `--watch`           | Tail progress after upload until the job reaches `AWAITING_CONFIRMATION` or a terminal status. At `AWAITING_CONFIRMATION`, shows job detail and may prompt if missing template slots are detected. |
+| `--watch`           | Tail progress after upload until the job reaches `AWAITING_CONFIRMATION` or a terminal status. At `AWAITING_CONFIRMATION`, shows job detail and may prompt (interactive TTY only) if missing template slots are detected. |
+| `--timeout`         | Give up watching after this many seconds (exit `8`); the job keeps running server-side                                                                                                             |
 | `--init-templates`  | At `AWAITING_CONFIRMATION`, initialize missing view slots and confirm automatically (non-interactive; no prompt).                                                                                  |
+| `--project`         | Project id or slug to upload into (org-wide keys only; default: org's default project)                                                                                                             |
 
 #### `olira ingest list`
 
@@ -227,25 +328,33 @@ olira ingest list --page-size 20
 | `--status`    | Filter by status (e.g. `failed`, `completed`, `completed_with_errors`, `awaiting_confirmation`) |
 | `--page`      | Page number (default: `1`)                                                                      |
 | `--page-size` | Jobs per page (default: `10`)                                                                   |
+| `--project`   | Project id or slug to scope the listing to                                                      |
 
 #### `olira ingest status`
 
 Show the current status and detail for a single job. Job detail lists **Warnings**
 (`missing_template_slot`) separately from **Errors** when applicable.
+**`status` is strictly read-only** — it never prompts and never mutates the
+job, even when it is `AWAITING_CONFIRMATION`; it prints the confirm/cancel
+hints and returns. Use `olira ingest confirm` to act on it.
 
 ```bash
 olira ingest status <job_id>
-olira ingest status <job_id> --watch
+olira ingest status <job_id> --watch --timeout 90
 ```
 
-When the job is `AWAITING_CONFIRMATION` and missing template slot warnings are present,
-`status` (without `--watch`) prints the detail and may offer the interactive confirm
-choices described above.
+`--timeout` bounds how long this call blocks, not the job's expected
+duration — ingestion jobs can legitimately run far longer than any
+reasonable wait. On exit `8` (`WATCH_TIMEOUT`) the job is still running;
+re-check with a plain `status` call later rather than watching again with a
+bigger timeout.
 
-| Flag      | Description                                                             |
-| --------- | ----------------------------------------------------------------------- |
-| `job_id`  | The job ID returned by `ingest upload`                                  |
-| `--watch` | Tail progress until the job reaches `AWAITING_CONFIRMATION` or terminal |
+| Flag        | Description                                                             |
+| ----------- | ------------------------------------------------------------------------- |
+| `job_id`    | The job ID returned by `ingest upload`                                    |
+| `--watch`   | Tail progress until the job reaches `AWAITING_CONFIRMATION` or terminal   |
+| `--timeout` | Give up watching after this many seconds (exit `8`)                       |
+| `--project` | Project id or slug the job belongs to                                     |
 
 #### `olira ingest confirm`
 
@@ -258,9 +367,11 @@ olira ingest confirm <job_id> --init-templates
 olira ingest confirm <job_id> --no-backfill --watch
 ```
 
-When missing template slot warnings are present and stdin is a TTY, `confirm` shows
-the interactive choices before calling the API. Use `--init-templates` or `--no-backfill`
-to skip the prompt.
+When missing template slot warnings are present and stdin is a TTY (and `--json`
+is not set), `confirm` shows the interactive choices before calling the API.
+Use `--init-templates` or `--no-backfill` to skip the prompt; without one of
+these and without a TTY, `confirm` exits `6` (`CONFIRMATION_REQUIRED`) instead
+of proceeding or hanging.
 
 | Flag               | Description                                                                                                                              |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -269,6 +380,8 @@ to skip the prompt.
 | `--no-backfill`    | Skip Stage 5 (AI view generation) before confirming                                                                                      |
 | `--init-templates` | Initialize missing view template slots on affected patients, then confirm (non-interactive). Requires app-api with missing-slot support. |
 | `--watch`          | Tail progress after confirming until the job reaches terminal                                                                            |
+| `--timeout`        | Give up watching after this many seconds (exit `8`)                                                                                       |
+| `--project`        | Project id or slug the job belongs to                                                                                                     |
 
 #### `olira ingest cancel`
 
@@ -281,10 +394,11 @@ olira ingest cancel <job_id>
 olira ingest cancel <job_id> --yes   # skip confirmation prompt
 ```
 
-| Flag     | Description                              |
-| -------- | ---------------------------------------- |
-| `job_id` | The job ID to cancel                     |
-| `--yes`  | Skip the interactive confirmation prompt |
+| Flag        | Description                              |
+| ----------- | ----------------------------------------- |
+| `job_id`    | The job ID to cancel                     |
+| `--yes`     | Skip the interactive confirmation prompt |
+| `--project` | Project id or slug the job belongs to    |
 
 #### `olira ingest retry-backfill`
 
@@ -297,10 +411,12 @@ olira ingest retry-backfill <job_id>
 olira ingest retry-backfill <job_id> --watch
 ```
 
-| Flag      | Description                                         |
-| --------- | --------------------------------------------------- |
-| `job_id`  | The job ID to retry                                 |
-| `--watch` | Tail progress until the backfill completes or fails |
+| Flag        | Description                                         |
+| ----------- | ----------------------------------------------------- |
+| `job_id`    | The job ID to retry                                 |
+| `--watch`   | Tail progress until the backfill completes or fails |
+| `--timeout` | Give up watching after this many seconds (exit `8`) |
+| `--project` | Project id or slug the job belongs to               |
 
 ## Scopes
 
@@ -310,7 +426,7 @@ Each scope grants access to one set of Olira endpoints.
 | Scope                   | Description                                                                        |
 | ----------------------- | ---------------------------------------------------------------------------------- |
 | `mcp:patient-state`     | Query patient state via the MCP Patient State server                               |
-| `sdk:event-log`         | Log health events on behalf of patients via the Olira SDK                          |
+| `sdk:event-log`         | Log health events and upload passive signal Parquet (`send_signals`) via the Olira SDK |
 | `sdk:patient-token`     | Mint short-lived, patient-locked JWTs for SDK use                                  |
 | `api:manage-patients`   | Create, read, update, and deactivate patient records via REST                      |
 | `api:org-config`        | Read and update organisation platform configuration via REST                       |
@@ -347,10 +463,20 @@ API keys never expire and are not stored locally — they live in the platform a
 
 ## Exit codes
 
-| Code | Meaning                                                                     |
-| ---- | --------------------------------------------------------------------------- |
-| `0`  | Success                                                                     |
-| `1`  | Error (authentication failure, API error, validation error, user cancelled) |
+| Code  | Meaning                                                                                          |
+| ----- | ------------------------------------------------------------------------------------------------- |
+| `0`   | Success — including a job that finished `completed_with_errors`; check `data.status`              |
+| `1`   | Unexpected/internal error                                                                         |
+| `2`   | Usage error (bad flags/arguments)                                                                  |
+| `3`   | Auth — not authenticated, expired, or the wrong credential type for this command (see [Credential types](#credential-types)) |
+| `4`   | Not found — job, key, or local file does not exist                                                |
+| `5`   | Validation failed (`validate`, or bad `keys create --scopes`)                                     |
+| `6`   | Wrong state / interactive input required — `error.remediation` (or stderr, in human mode) names the exact flag to add |
+| `7`   | Network or server error                                                                           |
+| `8`   | `ingest ... --watch --timeout` exceeded; the job is still running server-side                     |
+| `130` | Interrupted (Ctrl-C) — including during `--watch`, where the job keeps running server-side        |
+
+In `--json` mode, every non-zero exit also has a matching `error.code` in the envelope (e.g. `AUTH_REQUIRED`, `NOT_FOUND`, `PROMPT_REQUIRED`, `CONFIRMATION_REQUIRED`, `WATCH_TIMEOUT`) — see [JSON envelope](#json-envelope).
 
 ## Common workflows
 
@@ -448,3 +574,24 @@ olira ingest retry-backfill <job_id> --watch
 olira ingest list
 olira ingest list --page 2 --page-size 20
 ```
+
+### Drive the CLI from a coding agent
+
+```bash
+# One-time, in the target repo — gives the agent everything below for free
+olira configure agents
+
+# The agent then runs commands like:
+export OLIRA_API_KEY=olira_prod_...
+olira validate data.jsonl --json
+# --timeout is a short bound on how long THIS call blocks, not a guess at
+# the job's real duration — ingestion can legitimately run for hours. On
+# exit 8 (WATCH_TIMEOUT), report progress and re-check with a later,
+# non-watching `status` call rather than re-watching with a bigger number.
+olira ingest upload data.jsonl --json --watch --timeout 90
+olira ingest confirm <job_id> --init-templates --json --watch --timeout 90
+```
+
+See [Non-interactive & agent use](#non-interactive--agent-use) for the full
+model (JSON envelope, exit codes, credential types, and every prompt's
+bypass flag).

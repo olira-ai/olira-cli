@@ -6,22 +6,31 @@ Subcommands:
   status <job_id>      Show (and optionally tail) a job's status
   confirm <job_id>     Confirm a job at AWAITING_CONFIRMATION
   cancel <job_id>      Cancel a job
+  retry-backfill <id>  Retry view backfill on a COMPLETED_WITH_ERRORS job
+
+Every command here uses the "sdk" credential class (a raw olira_... API
+key) — /v1/* routes reject browser-login JWTs.
 """
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from typing import Any
 
 import httpx
 
-from olira_cli.credentials import load_credentials
+from olira_cli import http, output
+from olira_cli.credentials import Auth, resolve_auth
+from olira_cli.errors import CliError, CommandResult, StateError, from_http_error, require_tty
 
 _TERMINAL = {"completed", "completed_with_errors", "cancelled", "failed"}
 _ACTIVE = {"queued", "validating", "inserting_patients", "inserting_logs", "confirmed", "replaying", "backfilling"}
 _PHASE2 = {"confirmed", "replaying", "backfilling"}
 _MISSING_TEMPLATE_SLOT = "missing_template_slot"
+_HEARTBEAT_SECONDS = 60.0
+_RETRY_BACKOFFS = (2.0, 4.0, 8.0)
 
 _STATUS_LABELS: dict[str, str] = {
     "queued": "Queued",
@@ -39,30 +48,19 @@ _STATUS_LABELS: dict[str, str] = {
 }
 
 
-def _require_creds() -> dict[str, Any] | None:
-    import os
-
-    api_key = os.environ.get("OLIRA_API_KEY")
-    if api_key:
-        creds = load_credentials()
-        api_server = (creds or {}).get("api_server", "https://api.prod.olira.ai")
-        return {"access_token": api_key, "api_server": api_server}
-    creds = load_credentials()
-    if not creds or not creds.get("access_token"):
-        print(
-            "Not logged in. Run: olira login  —  or set OLIRA_API_KEY=olira_... for SDK operations.",
-            file=sys.stderr,
-        )
-        return None
-    return creds
+def _project(args: Any) -> str | None:
+    return getattr(args, "project", None) or os.environ.get("OLIRA_PROJECT")
 
 
-def _headers(token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
+def _headers(auth: Auth, project: str | None) -> dict[str, str]:
+    h = {"Authorization": f"Bearer {auth.token}"}
+    if project:
+        h["X-Olira-Project"] = project
+    return h
 
 
-def _api(creds: dict[str, Any]) -> str:
-    return creds["api_server"].rstrip("/")
+def _api(auth: Auth) -> str:
+    return auth.api_server.rstrip("/")
 
 
 def _fmt_status(status: str) -> str:
@@ -84,8 +82,8 @@ def _print_job_row(j: dict[str, Any]) -> None:
     print(f"  {jid}  {st:<28} {pts:<14} {logs:<14}{errs:<10} {age}")
 
 
-def _fetch_job(client: httpx.Client, api_base: str, token: str, job_id: str) -> dict[str, Any]:
-    r = client.get(f"{api_base}/v1/ingestion/jobs/{job_id}", headers=_headers(token), timeout=30)
+def _fetch_job(client: httpx.Client, auth: Auth, job_id: str, project: str | None) -> dict[str, Any]:
+    r = client.get(f"{_api(auth)}/v1/ingestion/jobs/{job_id}", headers=_headers(auth, project), timeout=30)
     r.raise_for_status()
     return r.json()
 
@@ -139,7 +137,15 @@ def _print_awaiting_confirmation_hints(job_id: str) -> None:
     )
 
 
-def _prompt_missing_template_action() -> str | None:
+def _render_awaiting_confirmation(job: dict[str, Any], job_id: str) -> None:
+    """Read-only rendering of an awaiting_confirmation job — never prompts, never mutates."""
+    if _job_has_missing_template_slots(job):
+        _print_missing_template_slot_summary(job)
+    _print_awaiting_confirmation_hints(job_id)
+
+
+def _prompt_missing_template_action() -> str:
+    require_tty("Resolving missing template slots", "--init-templates or --no-backfill")
     from InquirerPy import inquirer
     from InquirerPy.base.control import Choice
 
@@ -155,15 +161,14 @@ def _prompt_missing_template_action() -> str | None:
             choices=choices,
         ).execute()
     except (KeyboardInterrupt, EOFError):
-        print("\nCancelled.", file=sys.stderr)
-        return None
+        raise CliError("Cancelled.", code="CANCELLED") from None
 
 
 def _confirm_job(
     client: httpx.Client,
-    api_base: str,
-    token: str,
+    auth: Auth,
     job_id: str,
+    project: str | None,
     *,
     summary_types: list[str] | None = None,
     skip_backfill: bool = False,
@@ -176,9 +181,9 @@ def _confirm_job(
         patch["skip_backfill"] = True
     if patch:
         r = client.patch(
-            f"{api_base}/v1/ingestion/jobs/{job_id}",
+            f"{_api(auth)}/v1/ingestion/jobs/{job_id}",
             json=patch,
-            headers=_headers(token),
+            headers=_headers(auth, project),
         )
         r.raise_for_status()
         if summary_types:
@@ -190,184 +195,135 @@ def _confirm_job(
     if initialize_missing_templates:
         confirm_body["initialize_missing_templates"] = True
     r = client.post(
-        f"{api_base}/v1/ingestion/jobs/{job_id}/confirm",
+        f"{_api(auth)}/v1/ingestion/jobs/{job_id}/confirm",
         json=confirm_body,
-        headers=_headers(token),
+        headers=_headers(auth, project),
     )
     r.raise_for_status()
 
 
-def _cancel_job(client: httpx.Client, api_base: str, token: str, job_id: str) -> None:
+def _cancel_job(client: httpx.Client, auth: Auth, job_id: str, project: str | None) -> None:
     r = client.post(
-        f"{api_base}/v1/ingestion/jobs/{job_id}/cancel",
-        headers=_headers(token),
+        f"{_api(auth)}/v1/ingestion/jobs/{job_id}/cancel",
+        headers=_headers(auth, project),
     )
     r.raise_for_status()
 
 
 def _handle_awaiting_confirmation(
-    api_base: str,
-    token: str,
+    auth: Auth,
     job_id: str,
     job: dict[str, Any],
     args: Any | None,
+    project: str | None,
     *,
     watch_after: bool = False,
-) -> int:
-    """Print job detail and optionally run interactive or flag-driven confirm."""
-    _print_job_detail(job)
+) -> CommandResult:
+    """Resolve an AWAITING_CONFIRMATION job — interactively or via flags. Mutating; not used by status."""
+    if not output.json_mode():
+        _print_job_detail(job)
 
     if not _job_has_missing_template_slots(job):
-        _print_awaiting_confirmation_hints(job_id)
-        return 0
+        if not output.json_mode():
+            _print_awaiting_confirmation_hints(job_id)
+        return CommandResult({"job": job})
 
     init_templates = bool(getattr(args, "init_templates", False)) if args is not None else False
     no_backfill = bool(getattr(args, "no_backfill", False)) if args is not None else False
     summary_types = getattr(args, "summary_types", None) if args is not None else None
 
-    try:
-        with httpx.Client(timeout=30) as client:
-            if init_templates:
-                print("\n  Initializing missing templates and confirming…")
-                _confirm_job(
-                    client,
-                    api_base,
-                    token,
-                    job_id,
-                    summary_types=summary_types,
-                    initialize_missing_templates=True,
-                )
-                print(f"  Job {job_id} confirmed — Phase 2 starting.")
-                return _watch_job(api_base, token, job_id) if watch_after else 0
+    with http.client() as client:
+        if init_templates:
+            print("\n  Initializing missing templates and confirming…")
+            _confirm_job(client, auth, job_id, project, summary_types=summary_types, initialize_missing_templates=True)
+            print(f"  Job {job_id} confirmed — Phase 2 starting.")
+            return _watch_job(auth, job_id, args, project=project) if watch_after else CommandResult({"job_id": job_id})
 
-            if no_backfill:
-                _confirm_job(
-                    client,
-                    api_base,
-                    token,
-                    job_id,
-                    summary_types=summary_types,
-                    skip_backfill=True,
-                )
-                print(f"  Job {job_id} confirmed — Phase 2 starting (views skipped).")
-                return _watch_job(api_base, token, job_id) if watch_after else 0
+        if no_backfill:
+            _confirm_job(client, auth, job_id, project, summary_types=summary_types, skip_backfill=True)
+            print(f"  Job {job_id} confirmed — Phase 2 starting (views skipped).")
+            return _watch_job(auth, job_id, args, project=project) if watch_after else CommandResult({"job_id": job_id})
 
-            if not sys.stdin.isatty():
+        if not sys.stdin.isatty() or output.json_mode():
+            if not output.json_mode():
                 _print_missing_template_slot_summary(job)
                 _print_awaiting_confirmation_hints(job_id)
-                return 0
+            return CommandResult({"job": job})
 
-            _print_missing_template_slot_summary(job)
-            choice = _prompt_missing_template_action()
-            if choice is None:
-                return 1
-            if choice == "cancel":
-                _cancel_job(client, api_base, token, job_id)
-                print(f"  Job {job_id} cancelled.")
-                return 0
-            if choice == "init":
-                print("\n  Initializing missing templates and confirming…")
-                _confirm_job(
-                    client,
-                    api_base,
-                    token,
-                    job_id,
-                    summary_types=summary_types,
-                    initialize_missing_templates=True,
-                )
-            elif choice == "skip":
-                _confirm_job(
-                    client,
-                    api_base,
-                    token,
-                    job_id,
-                    summary_types=summary_types,
-                    skip_backfill=True,
-                )
-            else:
-                _confirm_job(client, api_base, token, job_id, summary_types=summary_types)
+        _print_missing_template_slot_summary(job)
+        choice = _prompt_missing_template_action()
+        if choice == "cancel":
+            _cancel_job(client, auth, job_id, project)
+            print(f"  Job {job_id} cancelled.")
+            return CommandResult({"job_id": job_id, "cancelled": True})
+        if choice == "init":
+            print("\n  Initializing missing templates and confirming…")
+            _confirm_job(client, auth, job_id, project, summary_types=summary_types, initialize_missing_templates=True)
+        elif choice == "skip":
+            _confirm_job(client, auth, job_id, project, summary_types=summary_types, skip_backfill=True)
+        else:
+            _confirm_job(client, auth, job_id, project, summary_types=summary_types)
 
-            print(f"  Job {job_id} confirmed — Phase 2 starting.")
-            return _watch_job(api_base, token, job_id) if watch_after else 0
-
-    except httpx.HTTPStatusError as e:
-        _print_http_error(e)
-        return 1
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
+        print(f"  Job {job_id} confirmed — Phase 2 starting.")
+        return _watch_job(auth, job_id, args, project=project) if watch_after else CommandResult({"job_id": job_id})
 
 
-def cmd_upload(args: Any) -> int:
+def cmd_upload(args: Any) -> CommandResult:
     """Upload a JSONL file and create an ingestion job."""
     import pathlib
     import uuid
 
     path = pathlib.Path(args.file)
     if not path.exists():
-        print(f"Error: file not found: {path}", file=sys.stderr)
-        return 1
+        raise CliError(f"File not found: {path}", code="FILE_NOT_FOUND", exit_code=4)
     if path.suffix != ".jsonl":
-        print("Error: file must have a .jsonl extension.", file=sys.stderr)
-        return 1
+        raise CliError("File must have a .jsonl extension.", code="INVALID_FILE", exit_code=5)
 
-    creds = _require_creds()
-    if not creds:
-        return 1
-
-    api_base = _api(creds)
-    token = creds["access_token"]
+    auth = resolve_auth("sdk", getattr(args, "api_key", None))
+    project = _project(args)
     idem_key = args.idempotency_key or f"cli-{uuid.uuid4().hex[:12]}"
     require_confirm = not args.no_confirm
 
-    print(f"Uploading {path.name} ({path.stat().st_size / 1024:.1f} KB)…")
+    output.info(f"Uploading {path.name} ({path.stat().st_size / 1024:.1f} KB)…")
 
-    try:
-        with httpx.Client(timeout=30) as client:
-            r = client.post(
-                f"{api_base}/v1/ingestion/upload-url",
-                headers=_headers(token),
+    with http.client() as client:
+        r = client.post(f"{_api(auth)}/v1/ingestion/upload-url", headers=_headers(auth, project))
+        r.raise_for_status()
+        url_data = r.json()
+        upload_url = url_data["upload_url"]
+        s3_key = url_data["s3_key"]
+        max_bytes = url_data.get("max_bytes", 100 * 1024 * 1024)
+
+        if path.stat().st_size > max_bytes:
+            raise CliError(
+                f"File ({path.stat().st_size / 1024 / 1024:.1f} MB) exceeds org limit "
+                f"({max_bytes / 1024 / 1024:.0f} MB).",
+                code="FILE_TOO_LARGE",
+                exit_code=5,
             )
-            r.raise_for_status()
-            url_data = r.json()
-            upload_url = url_data["upload_url"]
-            s3_key = url_data["s3_key"]
-            max_bytes = url_data.get("max_bytes", 100 * 1024 * 1024)
 
-            if path.stat().st_size > max_bytes:
-                print(
-                    f"Error: file ({path.stat().st_size / 1024 / 1024:.1f} MB) "
-                    f"exceeds org limit ({max_bytes / 1024 / 1024:.0f} MB).",
-                    file=sys.stderr,
-                )
-                return 1
+        output.info("  Uploading to S3…")
+        with open(path, "rb") as f:
+            s3r = httpx.put(upload_url, content=f.read(), timeout=120)
+        if not s3r.is_success:
+            raise CliError(f"S3 upload failed ({s3r.status_code}).", code="NETWORK_ERROR", exit_code=7)
 
-            print("  Uploading to S3…")
-            with open(path, "rb") as f:
-                s3r = httpx.put(upload_url, content=f.read(), timeout=120)
-            if not s3r.is_success:
-                print(f"Error: S3 upload failed ({s3r.status_code}).", file=sys.stderr)
-                return 1
+        output.info("  Creating ingestion job…")
+        body: dict[str, Any] = {
+            "s3_key": s3_key,
+            "idempotency_key": idem_key,
+            "require_confirmation": require_confirm,
+        }
+        if args.summary_types:
+            body["summary_types"] = args.summary_types
+        if getattr(args, "no_backfill", False):
+            body["skip_backfill"] = True
+        r = client.post(f"{_api(auth)}/v1/ingestion/jobs", json=body, headers=_headers(auth, project))
+        r.raise_for_status()
+        job = r.json()
+        job_id = job["job_id"]
 
-            print("  Creating ingestion job…")
-            body: dict[str, Any] = {
-                "s3_key": s3_key,
-                "idempotency_key": idem_key,
-                "require_confirmation": require_confirm,
-            }
-            if args.summary_types:
-                body["summary_types"] = args.summary_types
-            if getattr(args, "no_backfill", False):
-                body["skip_backfill"] = True
-            r = client.post(
-                f"{api_base}/v1/ingestion/jobs",
-                json=body,
-                headers=_headers(token),
-            )
-            r.raise_for_status()
-            job = r.json()
-            job_id = job["job_id"]
-
+    if not output.json_mode():
         print(f"\n  Job created: {job_id}")
         print(f"  Idempotency key: {idem_key}")
         if require_confirm:
@@ -375,265 +331,273 @@ def cmd_upload(args: Any) -> int:
         else:
             print("\n  Job will run to completion without confirmation (--no-confirm).")
 
-        if args.watch:
-            return _watch_job(api_base, token, job_id, args)
+    if args.watch:
+        return _watch_job(auth, job_id, args, project=project, timeout=getattr(args, "timeout", None))
 
-        return 0
-
-    except httpx.HTTPStatusError as e:
-        _print_http_error(e)
-        return 1
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
+    return CommandResult({"job_id": job_id, "idempotency_key": idem_key, "require_confirmation": require_confirm})
 
 
-def cmd_list(args: Any) -> int:
+def cmd_list(args: Any) -> CommandResult:
     """List ingestion jobs for the org."""
-    creds = _require_creds()
-    if not creds:
-        return 1
-
-    api_base = _api(creds)
-    token = creds["access_token"]
+    auth = resolve_auth("sdk", getattr(args, "api_key", None))
+    project = _project(args)
     page = getattr(args, "page", 1)
     page_size = getattr(args, "page_size", 10)
     status_filter = getattr(args, "status", None)
 
-    try:
-        with httpx.Client(timeout=30) as client:
-            params: dict[str, Any] = {"page": page, "page_size": page_size}
-            if status_filter:
-                params["status"] = status_filter
-            r = client.get(
-                f"{api_base}/v1/ingestion/jobs",
-                params=params,
-                headers=_headers(token),
-            )
-            r.raise_for_status()
-            data = r.json()
+    with http.client() as client:
+        params: dict[str, Any] = {"page": page, "page_size": page_size}
+        if status_filter:
+            params["status"] = status_filter
+        r = client.get(f"{_api(auth)}/v1/ingestion/jobs", params=params, headers=_headers(auth, project))
+        r.raise_for_status()
+        data = r.json()
 
-        jobs = data.get("jobs") or []
-        total = data.get("total", len(jobs))
+    jobs = data.get("jobs") or []
+    total = data.get("total", len(jobs))
+    pages = max(1, -(-total // page_size))
 
+    if not output.json_mode():
         if not jobs:
             msg = "No ingestion jobs found."
             if status_filter:
                 msg = f"No {status_filter} jobs found."
             print(msg)
-            return 0
+        else:
+            print(f"\n  {'JOB ID':<26} {'STATUS':<28} {'PATIENTS':<14} {'LOGS':<14} {'ERRORS':<10} {'CREATED'}")
+            print("  " + "-" * 104)
+            for j in jobs:
+                _print_job_row(j)
+            print(f"\n  Page {page}/{pages} · {total} total job(s)")
+            if page < pages:
+                print(f"  Next page: olira ingest list --page {page + 1}")
 
-        print(f"\n  {'JOB ID':<26} {'STATUS':<28} {'PATIENTS':<14} {'LOGS':<14} {'ERRORS':<10} {'CREATED'}")
-        print("  " + "-" * 104)
-        for j in jobs:
-            _print_job_row(j)
-
-        pages = max(1, -(-total // page_size))
-        print(f"\n  Page {page}/{pages} · {total} total job(s)")
-        if page < pages:
-            print(f"  Next page: olira ingest list --page {page + 1}")
-        return 0
-
-    except httpx.HTTPStatusError as e:
-        _print_http_error(e)
-        return 1
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
+    return CommandResult({"jobs": jobs, "total": total, "page": page, "pages": pages})
 
 
-def cmd_status(args: Any) -> int:
-    """Show status for a single job, optionally tailing progress."""
-    creds = _require_creds()
-    if not creds:
-        return 1
-
-    api_base = _api(creds)
-    token = creds["access_token"]
+def cmd_status(args: Any) -> CommandResult:
+    """Show status for a single job. Strictly read-only — never prompts, never mutates."""
+    auth = resolve_auth("sdk", getattr(args, "api_key", None))
+    project = _project(args)
 
     if args.watch:
-        return _watch_job(api_base, token, args.job_id, args)
+        return _watch_job(
+            auth, args.job_id, args, project=project, timeout=getattr(args, "timeout", None), read_only=True
+        )
 
-    try:
-        with httpx.Client(timeout=30) as client:
-            job = _fetch_job(client, api_base, token, args.job_id)
-        if job.get("status") == "awaiting_confirmation" and _job_has_missing_template_slots(job):
-            return _handle_awaiting_confirmation(api_base, token, args.job_id, job, args)
+    with http.client() as client:
+        job = _fetch_job(client, auth, args.job_id, project)
+
+    if not output.json_mode():
         _print_job_detail(job)
-        return 0
-    except httpx.HTTPStatusError as e:
-        _print_http_error(e)
-        return 1
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
+        if job.get("status") == "awaiting_confirmation":
+            _render_awaiting_confirmation(job, args.job_id)
+
+    return CommandResult({"job": job})
 
 
-def cmd_confirm(args: Any) -> int:
+def cmd_confirm(args: Any) -> CommandResult:
     """Confirm a job at AWAITING_CONFIRMATION to start Phase 2."""
-    creds = _require_creds()
-    if not creds:
-        return 1
+    auth = resolve_auth("sdk", getattr(args, "api_key", None))
+    project = _project(args)
 
-    api_base = _api(creds)
-    token = creds["access_token"]
+    with http.client() as client:
+        job = _fetch_job(client, auth, args.job_id, project)
 
-    try:
-        with httpx.Client(timeout=30) as client:
-            job = _fetch_job(client, api_base, token, args.job_id)
-
-        if job.get("status") == "awaiting_confirmation" and _job_has_missing_template_slots(job):
-            if getattr(args, "init_templates", False) or getattr(args, "no_backfill", False):
-                pass
-            elif sys.stdin.isatty():
-                return _handle_awaiting_confirmation(api_base, token, args.job_id, job, args, watch_after=args.watch)
-            else:
+    if job.get("status") == "awaiting_confirmation" and _job_has_missing_template_slots(job):
+        has_flag = getattr(args, "init_templates", False) or getattr(args, "no_backfill", False)
+        if not has_flag:
+            if sys.stdin.isatty() and not output.json_mode():
+                return _handle_awaiting_confirmation(auth, args.job_id, job, args, project, watch_after=args.watch)
+            if not output.json_mode():
                 _print_missing_template_slot_summary(job)
                 _print_awaiting_confirmation_hints(args.job_id)
-                print(
-                    "\n  Re-run with --init-templates or --no-backfill for non-interactive use.",
-                    file=sys.stderr,
-                )
-                return 1
-
-        with httpx.Client(timeout=30) as client:
-            _confirm_job(
-                client,
-                api_base,
-                token,
-                args.job_id,
-                summary_types=args.summary_types,
-                skip_backfill=getattr(args, "no_backfill", False),
-                initialize_missing_templates=getattr(args, "init_templates", False),
+            raise StateError(
+                "Job is missing view template slots and cannot be confirmed non-interactively.",
+                code="CONFIRMATION_REQUIRED",
+                remediation="Re-run with --init-templates or --no-backfill.",
+                details={"job": job},
             )
 
+    with http.client() as client:
+        _confirm_job(
+            client,
+            auth,
+            args.job_id,
+            project,
+            summary_types=args.summary_types,
+            skip_backfill=getattr(args, "no_backfill", False),
+            initialize_missing_templates=getattr(args, "init_templates", False),
+        )
+
+    if not output.json_mode():
         print(f"  Job {args.job_id} confirmed — Phase 2 starting.")
-        if args.watch:
-            return _watch_job(api_base, token, args.job_id, args)
-        return 0
-
-    except httpx.HTTPStatusError as e:
-        _print_http_error(e)
-        return 1
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
+    if args.watch:
+        return _watch_job(auth, args.job_id, args, project=project, timeout=getattr(args, "timeout", None))
+    return CommandResult({"job_id": args.job_id, "confirmed": True})
 
 
-def cmd_cancel(args: Any) -> int:
+def cmd_cancel(args: Any) -> CommandResult:
     """Cancel an ingestion job."""
-    creds = _require_creds()
-    if not creds:
-        return 1
-
-    api_base = _api(creds)
-    token = creds["access_token"]
+    auth = resolve_auth("sdk", getattr(args, "api_key", None))
+    project = _project(args)
 
     if not args.yes:
-        try:
-            confirm = input(f"Cancel job {args.job_id}? [y/N]: ").strip().lower()
-        except EOFError:
-            return 1
+        require_tty("Cancelling a job", "--yes")
+        confirm = input(f"Cancel job {args.job_id}? [y/N]: ").strip().lower()
         if confirm != "y":
-            print("Cancelled.")
-            return 0
+            if not output.json_mode():
+                print("Cancelled.")
+            return CommandResult({"job_id": args.job_id, "cancelled": False})
 
-    try:
-        with httpx.Client(timeout=30) as client:
-            r = client.post(
-                f"{api_base}/v1/ingestion/jobs/{args.job_id}/cancel",
-                headers=_headers(token),
-            )
-            r.raise_for_status()
+    with http.client() as client:
+        r = client.post(f"{_api(auth)}/v1/ingestion/jobs/{args.job_id}/cancel", headers=_headers(auth, project))
+        r.raise_for_status()
+
+    if not output.json_mode():
         print(f"  Job {args.job_id} cancellation requested.")
-        return 0
-    except httpx.HTTPStatusError as e:
-        _print_http_error(e)
-        return 1
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
+    return CommandResult({"job_id": args.job_id, "cancelled": True})
 
 
-def cmd_retry_backfill(args: Any) -> int:
+def cmd_retry_backfill(args: Any) -> CommandResult:
     """Retry view backfill on a COMPLETED_WITH_ERRORS job."""
-    creds = _require_creds()
-    if not creds:
-        return 1
+    auth = resolve_auth("sdk", getattr(args, "api_key", None))
+    project = _project(args)
 
-    api_base = _api(creds)
-    token = creds["access_token"]
+    with http.client() as client:
+        r = client.post(f"{_api(auth)}/v1/ingestion/jobs/{args.job_id}/retry-backfill", headers=_headers(auth, project))
+        r.raise_for_status()
 
-    try:
-        with httpx.Client(timeout=30) as client:
-            r = client.post(
-                f"{api_base}/v1/ingestion/jobs/{args.job_id}/retry-backfill",
-                headers=_headers(token),
-            )
-            r.raise_for_status()
-
+    if not output.json_mode():
         print(f"  Job {args.job_id} backfill retry started.")
-        if args.watch:
-            return _watch_job(api_base, token, args.job_id, args)
-        return 0
-
-    except httpx.HTTPStatusError as e:
-        _print_http_error(e)
-        return 1
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
+    if args.watch:
+        return _watch_job(auth, args.job_id, args, project=project, timeout=getattr(args, "timeout", None))
+    return CommandResult({"job_id": args.job_id, "retry_started": True})
 
 
-def _watch_job(api_base: str, token: str, job_id: str, args: Any | None = None) -> int:
-    """Poll a job until terminal, printing a line on stage change or 5% progress jump."""
-    print(f"\n  Watching job {job_id} (Ctrl-C to stop)…\n")
+def _emit_progress(job: dict[str, Any], event: str) -> None:
+    if output.json_mode():
+        output.emit_event(
+            {
+                "event": event,
+                "job_id": job.get("job_id"),
+                "status": job.get("status"),
+                "stage": job.get("stage"),
+                "progress_pct": job.get("progress_pct"),
+                "patients_processed": job.get("patients_processed"),
+                "patients_total": job.get("patients_total"),
+                "logs_processed": job.get("logs_processed"),
+                "logs_total": job.get("logs_total"),
+            }
+        )
+        return
+    if event == "heartbeat":
+        print(f"  … still {_fmt_status(job.get('status', ''))} — {job.get('progress_pct', 0.0):.0f}%")
+        return
+    bar = _progress_bar(job.get("progress_pct", 0.0))
+    pts_done = job.get("patients_processed", 0)
+    pts_tot = job.get("patients_total", 0)
+    logs_done = job.get("logs_processed", 0)
+    logs_tot = job.get("logs_total", 0)
+    eta = f"  ETA ~{job['estimated_seconds_remaining']}s" if job.get("estimated_seconds_remaining") else ""
+    print(
+        f"  {_fmt_status(job.get('status', '')):<28} {bar}  {pts_done}/{pts_tot} patients  {logs_done}/{logs_tot} logs{eta}"
+    )
+
+
+def _fetch_job_with_retry(client: httpx.Client, auth: Auth, job_id: str, project: str | None) -> dict[str, Any]:
+    """Fetch job status, retrying transient network/5xx errors with backoff.
+
+    A blip mid-watch used to kill the whole watch immediately; now it takes
+    up to ~14s of retries before giving up.
+    """
+    last_exc: Exception | None = None
+    for backoff in (*_RETRY_BACKOFFS, None):
+        try:
+            return _fetch_job(client, auth, job_id, project)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code < 500:
+                raise
+            last_exc = e
+        except httpx.TransportError as e:
+            last_exc = e
+        if backoff is not None:
+            output.warn(f"  Warning: transient error polling job status, retrying in {backoff:.0f}s…")
+            time.sleep(backoff)
+    assert last_exc is not None
+    if isinstance(last_exc, httpx.HTTPStatusError):
+        raise from_http_error(last_exc)
+    raise CliError(str(last_exc), code="NETWORK_ERROR", exit_code=7)
+
+
+def _watch_job(
+    auth: Auth,
+    job_id: str,
+    args: Any | None = None,
+    *,
+    project: str | None = None,
+    timeout: float | None = None,
+    read_only: bool = False,
+) -> CommandResult:
+    """Poll a job until terminal, printing/emitting on stage change, progress jump, or heartbeat."""
+    if not output.json_mode():
+        print(f"\n  Watching job {job_id} (Ctrl-C to stop)…\n")
     last_stage = ""
     last_pct = -1.0
+    last_emit = time.monotonic()
+    start = time.monotonic()
     try:
-        with httpx.Client(timeout=30) as client:
+        with http.client() as client:
             while True:
-                try:
-                    job = _fetch_job(client, api_base, token, job_id)
-                except httpx.HTTPStatusError as e:
-                    _print_http_error(e)
-                    return 1
+                job = _fetch_job_with_retry(client, auth, job_id, project)
 
                 status = job.get("status", "")
                 stage = job.get("stage", "")
                 pct = job.get("progress_pct", 0.0)
+                now = time.monotonic()
 
                 if stage != last_stage or abs(pct - last_pct) >= 5.0:
-                    last_stage = stage
-                    last_pct = pct
-                    bar = _progress_bar(pct)
-                    pts_done = job.get("patients_processed", 0)
-                    pts_tot = job.get("patients_total", 0)
-                    logs_done = job.get("logs_processed", 0)
-                    logs_tot = job.get("logs_total", 0)
-                    eta = (
-                        f"  ETA ~{job['estimated_seconds_remaining']}s"
-                        if job.get("estimated_seconds_remaining")
-                        else ""
-                    )
-                    print(
-                        f"  {_fmt_status(status):<28} {bar}  "
-                        f"{pts_done}/{pts_tot} patients  {logs_done}/{logs_tot} logs{eta}"
-                    )
+                    last_stage, last_pct, last_emit = stage, pct, now
+                    _emit_progress(job, "progress")
+                elif now - last_emit >= _HEARTBEAT_SECONDS:
+                    last_emit = now
+                    _emit_progress(job, "heartbeat")
 
                 if status == "awaiting_confirmation":
-                    return _handle_awaiting_confirmation(api_base, token, job_id, job, args, watch_after=False)
+                    if read_only:
+                        if not output.json_mode():
+                            _print_job_detail(job)
+                            _render_awaiting_confirmation(job, job_id)
+                        return CommandResult({"job": job})
+                    return _handle_awaiting_confirmation(auth, job_id, job, args, project, watch_after=False)
 
                 if status in _TERMINAL:
-                    _print_job_detail(job)
-                    return 0 if status in {"completed", "completed_with_errors"} else 1
+                    if not output.json_mode():
+                        _print_job_detail(job)
+                    if status in {"completed", "completed_with_errors"}:
+                        return CommandResult({"job": job})
+                    raise StateError(
+                        f"Job {job_id} ended as {status}.",
+                        code="JOB_FAILED" if status == "failed" else "JOB_CANCELLED",
+                        details={"job": job},
+                    )
+
+                if timeout is not None and now - start > timeout:
+                    raise CliError(
+                        f"Timed out after {timeout:.0f}s waiting for job {job_id} (still {status}).",
+                        code="WATCH_TIMEOUT",
+                        exit_code=8,
+                        remediation=f"olira ingest status {job_id} --json --watch --timeout <seconds>",
+                        details={"job": job},
+                    )
 
                 interval = 30.0 if status in _PHASE2 else 5.0
                 time.sleep(interval)
 
     except KeyboardInterrupt:
-        print("\n  Watch stopped (job is still running).")
-        return 0
+        if not output.json_mode():
+            print("\n  Watch stopped (job is still running).")
+        raise
 
 
 def _print_job_detail(job: dict[str, Any]) -> None:
@@ -696,12 +660,3 @@ def _print_job_detail(job: dict[str, Any]) -> None:
             print(f"    {line:>5}  {e.get('message', '')}")
         if len(errors) > 10:
             print(f"    … and {len(errors) - 10} more")
-
-
-def _print_http_error(e: httpx.HTTPStatusError) -> None:
-    try:
-        body = e.response.json()
-        msg = body.get("detail") or body.get("message") or str(e)
-    except Exception:
-        msg = str(e)
-    print(f"Error ({e.response.status_code}): {msg}", file=sys.stderr)

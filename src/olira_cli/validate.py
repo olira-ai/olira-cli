@@ -8,17 +8,21 @@ Checks each line of a JSONL file for:
   - Patient records appear before any log that first references them
     (unless --skip-order-check is passed or the patient already exists in the org)
 
-Prints a summary and exits 0 if clean, 1 if errors were found.
+Prints a summary; raises ValidationError (exit 5) if errors were found.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from olira_cli import http, output
+from olira_cli.credentials import resolve_auth
+from olira_cli.errors import CliError, CommandResult, ValidationError
 
 KNOWN_EVENT_TYPES: frozenset[str] = frozenset(
     {
@@ -109,13 +113,12 @@ def _is_pii(patient_id: str) -> str | None:
     return None
 
 
-def cmd_validate(args: Any) -> int:
+def cmd_validate(args: Any) -> CommandResult:
     path = Path(args.file)
     if not path.exists():
-        print(f"Error: file not found: {path}", file=sys.stderr)
-        return 1
+        raise CliError(f"File not found: {path}", code="FILE_NOT_FOUND", exit_code=4)
     if path.suffix != ".jsonl":
-        print(f"Warning: file does not have a .jsonl extension: {path.name}", file=sys.stderr)
+        output.warn(f"Warning: file does not have a .jsonl extension: {path.name}")
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -129,11 +132,9 @@ def cmd_validate(args: Any) -> int:
 
     org_patient_ids: set[str] | None = None
     if getattr(args, "check_org", False):
-        org_patient_ids = _fetch_org_patient_ids()
-        if org_patient_ids is None:
-            return 1
+        org_patient_ids = _fetch_org_patient_ids(args)
 
-    print(f"Validating {path.name} …")
+    output.info(f"Validating {path.name} …")
 
     line_count = 0
     with open(path, encoding="utf-8") as f:
@@ -142,7 +143,7 @@ def cmd_validate(args: Any) -> int:
             if not raw:
                 continue
             line_count += 1
-            if line_count % 50_000 == 0:
+            if line_count % 50_000 == 0 and not output.json_mode():
                 print(f"  {line_count:,} lines processed…", end="\r", flush=True)
 
             try:
@@ -224,14 +225,42 @@ def cmd_validate(args: Any) -> int:
                     )
 
     total_lines = patient_count + log_count
-    print("\r" + " " * 40 + "\r", end="")
+    counts = {
+        "total_lines": total_lines,
+        "patient_count": patient_count,
+        "log_count": log_count,
+        "event_type_counts": event_type_counts,
+    }
 
-    GREEN = "\033[32m"
-    YELLOW = "\033[33m"
-    RED = "\033[31m"
-    BOLD = "\033[1m"
-    DIM = "\033[2m"
-    RESET = "\033[0m"
+    if not output.json_mode():
+        _render_summary(total_lines, patient_count, log_count, event_type_counts, warnings, errors)
+
+    if errors:
+        raise ValidationError(
+            f"{len(errors):,} error(s) found.",
+            details={"errors": errors, "warnings": warnings, "counts": counts},
+        )
+
+    return CommandResult({"errors": [], "warnings": warnings, "counts": counts})
+
+
+def _render_summary(
+    total_lines: int,
+    patient_count: int,
+    log_count: int,
+    event_type_counts: dict[str, int],
+    warnings: list[str],
+    errors: list[str],
+) -> None:
+    color = output.use_color()
+    GREEN = "\033[32m" if color else ""
+    YELLOW = "\033[33m" if color else ""
+    RED = "\033[31m" if color else ""
+    BOLD = "\033[1m" if color else ""
+    DIM = "\033[2m" if color else ""
+    RESET = "\033[0m" if color else ""
+
+    print("\r" + " " * 40 + "\r", end="")
 
     divider = f"  {DIM}{'─' * 58}{RESET}"
 
@@ -264,60 +293,43 @@ def cmd_validate(args: Any) -> int:
         if len(errors) > 20:
             print(f"  {DIM}  … and {len(errors) - 20} more{RESET}")
         print(f"\n  {RED}{BOLD}Validation failed{RESET} — {len(errors):,} error(s) found.")
-        return 1
+        return
 
     suffix = f" {DIM}(with warnings){RESET}" if warnings else ""
     print(f"\n  {GREEN}✔{RESET}  {BOLD}Validation passed{RESET}{suffix}")
-    return 0
 
 
-def _fetch_org_patient_ids() -> set[str] | None:
+def _fetch_org_patient_ids(args: Any) -> set[str]:
     """Fetch external_identifiers from all org patients via the SDK API."""
-    import httpx
+    auth = resolve_auth("sdk", getattr(args, "api_key", None))
+    project = getattr(args, "project", None) or os.environ.get("OLIRA_PROJECT")
+    headers = {"Authorization": f"Bearer {auth.token}"}
+    if project:
+        headers["X-Olira-Project"] = project
 
-    from olira_cli.credentials import load_credentials
-
-    creds = load_credentials()
-    if not creds or not creds.get("access_token"):
-        print("Not logged in. Run: olira login", file=sys.stderr)
-        return None
-
-    api_base = creds["api_server"].rstrip("/")
-    token = creds["access_token"]
     ids: set[str] = set()
 
-    print("  Fetching org patients for cross-check…")
+    output.info("  Fetching org patients for cross-check…")
     page = 1
-    try:
-        with httpx.Client(timeout=30) as client:
-            while True:
-                r = client.get(
-                    f"{api_base}/v1/patients",
-                    params={"page": page, "page_size": 100},
-                    headers={"Authorization": f"Bearer {token}"},
-                )
-                r.raise_for_status()
-                data = r.json()
-                patients = data.get("patients") or data.get("data") or []
-                for p in patients:
-                    for ext in p.get("external_identifiers") or []:
-                        if ext.get("value"):
-                            ids.add(str(ext["value"]))
-                    if p.get("id"):
-                        ids.add(str(p["id"]))
-                total = data.get("total", 0)
-                if page * 100 >= total:
-                    break
-                page += 1
-        print(f"  Found {len(ids)} patient identifier(s) in org.\n")
-        return ids
-    except httpx.HTTPStatusError as e:
-        try:
-            msg = e.response.json().get("detail") or str(e)
-        except Exception:
-            msg = str(e)
-        print(f"Error fetching org patients ({e.response.status_code}): {msg}", file=sys.stderr)
-        return None
-    except Exception as e:
-        print(f"Error fetching org patients: {e}", file=sys.stderr)
-        return None
+    with http.client() as client:
+        while True:
+            r = client.get(
+                f"{auth.api_server.rstrip('/')}/v1/patients",
+                params={"page": page, "page_size": 100},
+                headers=headers,
+            )
+            r.raise_for_status()
+            data = r.json()
+            patients = data.get("patients") or data.get("data") or []
+            for p in patients:
+                for ext in p.get("external_identifiers") or []:
+                    if ext.get("value"):
+                        ids.add(str(ext["value"]))
+                if p.get("id"):
+                    ids.add(str(p["id"]))
+            total = data.get("total", 0)
+            if page * 100 >= total:
+                break
+            page += 1
+    output.info(f"  Found {len(ids)} patient identifier(s) in org.\n")
+    return ids
