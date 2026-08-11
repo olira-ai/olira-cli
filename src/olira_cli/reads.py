@@ -430,6 +430,5 @@ def _render_log_type(lt: dict[str, Any]) -> None:
         print(f"  Aliases:     {', '.join(lt['aliases'])}")
     print(f"  Name:        {lt.get('display_name', '')}")
     print(f"  Description: {lt.get('description', '')}")
-    print(f"  User-facing: {lt.get('user_facing', True)}")
     print("  Payload schema:")
     print(json.dumps(lt.get("payload_schema", {}), indent=2))

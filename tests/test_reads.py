@@ -244,8 +244,6 @@ def test_log_types_get_by_subtype(run_cli, no_creds, monkeypatch):
             "payload_description": "",
             "sources": ["logged"],
             "version": 1,
-            "target_modules": [],
-            "user_facing": True,
         }
     )
     run_cli(["--json", "log-types", "get", "symptom_report"], handler=handler)
