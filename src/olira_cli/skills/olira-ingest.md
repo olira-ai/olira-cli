@@ -92,16 +92,23 @@ pipeline accepts inline records from the Python SDK:
 
 ```python
 import os
+import time
 from olira import OliraClient
 
 client = OliraClient(api_key=os.environ["OLIRA_API_KEY"])
 
 job = client.create_ingestion_job(records=[...])  # ≤ 50,000 IngestRecord entries;
                                                   # same shapes as the JSONL lines above
-# Poll until awaiting_confirmation (default) or completed:
-job = client.get_ingestion_job(job_id=job.job_id)
-# Then confirm — same missing-template rule as the CLI:
-client.confirm_ingestion_job(job_id=job.job_id, initialize_missing_templates=True)
+
+# Poll until the job needs confirmation or reaches a terminal state:
+TERMINAL = ("completed", "completed_with_errors", "failed", "cancelled")
+while job.status not in ("awaiting_confirmation",) + TERMINAL:
+    time.sleep(5)
+    job = client.get_ingestion_job(job_id=job.job_id)
+
+# Confirm ONLY from awaiting_confirmation — same missing-template rule as the CLI:
+if job.status == "awaiting_confirmation":
+    job = client.confirm_ingestion_job(job_id=job.job_id, initialize_missing_templates=True)
 ```
 
 Same job lifecycle, states, and confirmation rules as the CLI flow — only

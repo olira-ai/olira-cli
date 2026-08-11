@@ -104,7 +104,10 @@ olira state logs <patient_id> --event-types <subtype> --limit 5 --json
   to confirm absorption.
 - **Already-FHIR sources:** `client.log_fhir(patient_id=..., resource=...)`
   maps an R4 resource to platform log types server-side. No `log_type`
-  choice, no payload shaping.
+  choice, no payload shaping. **One resource per call** — references to
+  resources submitted in other calls are not resolved (inline `display`
+  text on the resource is used when present). FHIR Bundles or exports that
+  need cross-resource context belong on an EHR integration — ask Olira.
 - **Non-Python stacks:** `POST /v1/logs/batch` with
   `Authorization: Bearer $OLIRA_API_KEY` is the same contract the SDK uses.
 - An `AsyncOliraClient` exists with the same methods as `async def`.
