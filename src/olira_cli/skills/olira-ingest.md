@@ -8,8 +8,10 @@ description: Upload and manage historical patient data ingestion jobs with the O
 Installed as `olira` (verify with `olira --version`; this doc matches v{{VERSION}}).
 For the auth-class split, the JSON envelope shape, and the full exit-code
 table shared by every olira command, see `AGENTS.md` at the repo root.
-This workflow is for **bulk historical files**; live, ongoing logging from
-the codebase itself is the `olira-logging` skill instead.
+This workflow covers **historical backfill** in two modes: bulk files via
+the CLI (below), and per-patient backfill from code via the SDK (see
+"Per-patient backfill from code"). Live, ongoing logging from the codebase
+is the `olira-logging` skill instead.
 
 ## Auth
 
@@ -81,6 +83,37 @@ olira ingest status <job_id> --json
 # 5. Check what's failing across the org
 olira ingest list --status failed --json
 ```
+
+## Per-patient backfill from code (patient onboarding)
+
+When your backend onboards ONE new patient and needs to push that
+patient's history, don't write a file and shell out — the same ingestion
+pipeline accepts inline records from the Python SDK:
+
+```python
+import os
+from olira import OliraClient
+
+client = OliraClient(api_key=os.environ["OLIRA_API_KEY"])
+
+job = client.create_ingestion_job(records=[...])  # ≤ 50,000 IngestRecord entries;
+                                                  # same shapes as the JSONL lines above
+# Poll until awaiting_confirmation (default) or completed:
+job = client.get_ingestion_job(job_id=job.job_id)
+# Then confirm — same missing-template rule as the CLI:
+client.confirm_ingestion_job(job_id=job.job_id, initialize_missing_templates=True)
+```
+
+Same job lifecycle, states, and confirmation rules as the CLI flow — only
+the transport differs. **Never use `log_batch()` for historical volume**:
+the ingestion pipeline stages rows, replays them in chronological order,
+and backfills summary views; `log_batch` does none of that.
+
+**Passive sensor data is a separate pipeline.** Multi-Hz
+accelerometer/gyroscope/GPS batches go through `client.send_signals(...)`
+(as Parquet — `records=` serialized locally, or pre-serialized `parquet=`
+bytes), never through ingestion jobs or event logs. Event history is JSONL
+or inline records only — do not try to ingest events as Parquet.
 
 ## Done checklist
 

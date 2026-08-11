@@ -12,7 +12,7 @@ runs the CLI, and passed as `api_key=` to the SDK client.
 This skill covers **live, ongoing logging**: `client.log(...)` calls in the
 codebase so events flow to Olira as they happen. Two adjacent workflows are
 different skills:
-- A **bulk historical file** (backfill of past data) → use the `olira-ingest` workflow (`olira validate` + `olira ingest upload`).
+- **Historical backfill** (a bulk file, or one patient's past history at setup time) → the `olira-ingest` workflow: `olira validate` + `olira ingest upload` for files, or `client.create_ingestion_job(records=...)` from code.
 - A data model **too awkward to reshape at every call site** (a vendor system's payloads, many call sites) → Olira supports registering org-native source schemas with server-side mappings. There is no CLI tooling for that yet; ask Olira.
 
 ## Step 1 — Find the right log type
@@ -90,6 +90,18 @@ olira state logs <patient_id> --event-types <subtype> --limit 5 --json
   `BatchResult(accepted, failed, errors)`.
   Always check `failed` and `errors` — partial failures are reported per item.
   `idempotency_key` (dedup on retry) exists on `LogSpec` only; `log()` does not take it.
+  **`log_batch` is for live bursts only — never for historical backfill.**
+  Months of past events (a bulk import, or one patient's history at setup
+  time) go through the ingestion pipeline instead
+  (`client.create_ingestion_job(...)` — see the `olira-ingest` skill),
+  which replays rows in chronological order and backfills summary views;
+  `log_batch` with old timestamps does neither.
+- **Passive sensor streams:** multi-Hz accelerometer/gyroscope/GPS batches
+  go through `client.send_signals(patient_id=..., sensor_type=..., source_device=..., records=... | parquet=...)`
+  as Parquet — `records=` serialized locally (`pip install olira[signals]`)
+  or pre-serialized `parquet=` bytes; same `sdk:event-log` scope — never
+  through `log()`/`log_batch()`. Returns a job handle; call `handle.wait()`
+  to confirm absorption.
 - **Already-FHIR sources:** `client.log_fhir(patient_id=..., resource=...)`
   maps an R4 resource to platform log types server-side. No `log_type`
   choice, no payload shaping.
