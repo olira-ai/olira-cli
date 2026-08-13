@@ -9,8 +9,13 @@ Installed as `olira` (verify with `olira --version`; this doc matches v{{VERSION
 
 ## Two credential classes — not interchangeable
 
-- **API key** (`OLIRA_API_KEY=olira_...`) — required by `olira ingest *`, `olira validate --check-org`, and every read-only query command (`patients`/`state`/`cohorts`/`projects`/`integrations`). A browser login is rejected for these.
+- **API key** (`OLIRA_API_KEY=olira_...`) — required by `olira ingest *`, `olira validate --check-org`, and every read-only query command (`patients`/`state`/`cohorts`/`projects`/`integrations`/`log-types`). A browser login is rejected for these.
 - **Browser login** (`olira login`) — required by `olira keys *` and `olira configure cursor`. An API key is rejected for these. Never run `olira login` yourself; it opens a real browser and refuses to run headlessly. Ask the human to run it, or to hand you an API key instead.
+
+**API keys never expire.** `olira status` reports the browser login
+credential only — `expired: true` in its output means the human's login
+lapsed, and has no effect on `OLIRA_API_KEY`. Do not conclude an API key is
+expired from `olira status`.
 
 ## Scopes
 
@@ -20,7 +25,7 @@ Grant only what a key needs — least privilege, one scope per capability:
 |---|---|
 | `sdk:historical-ingest` | Upload/manage bulk historical ingestion jobs (`olira ingest *`) |
 | `api:manage-patients` | Create, read, update, soft-delete patients; also needed to query them |
-| `sdk:event-log` | Log events and upload passive signal Parquet (`send_signals`) |
+| `sdk:event-log` | Log events and upload passive signal Parquet (`send_signals`); also gates `olira log-types` discovery |
 | `sdk:state-read` | Read patient state, summaries, event logs (`olira state *`) |
 | `sdk:patient-token` | Mint short-lived patient-scoped JWTs |
 | `sdk:integrations` | Manage/query EHR integrations — catalog, connect/disconnect, sync status (control-plane only) |
@@ -40,8 +45,10 @@ olira keys revoke <name-or-id> --yes
 
 Two independent things, don't confuse them:
 
-- **`olira init agent`** writes the skills you're reading now (`olira-ingest`/`olira-query`/`olira-setup`) plus `AGENTS.md` — teaches an agent to drive the CLI's commands.
-- **`olira configure cursor` / `configure claude` / `configure codex`** connect that client's *own* MCP tool access to Olira's MCP server (for querying patient state as a tool, not by shelling out to the CLI). `configure cursor` needs a browser login and embeds the current token; `configure claude`/`configure codex` need no auth to run and never write a secret to disk — both reference an env var (`OLIRA_API_KEY` by default, override with `--api-key-env`) that must be exported wherever that client actually runs, scoped to `mcp:patient-state`.
+- **`olira init agent`** writes the skills you're reading now (`olira-ingest`/`olira-logging`/`olira-query`/`olira-setup`) plus `AGENTS.md` — teaches an agent to drive the CLI's commands.
+- **`olira configure cursor` / `configure claude` / `configure codex`** connect that client's *own* MCP tool access to Olira's MCP server, for querying patient state as a tool instead of shelling out to the CLI.
+  - `configure cursor` needs a browser login and embeds the current token into `.cursor/mcp.json`.
+  - `configure claude` / `configure codex` need no auth to run and never write a secret to disk. The config references an env var (`OLIRA_API_KEY` by default; override with `--api-key-env`) that must be exported wherever that client actually runs, holding a key with `mcp:patient-state` scope.
 
 ## Golden rules for this workflow
 

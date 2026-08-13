@@ -119,6 +119,7 @@ def test_init_agent_codex_writes_shared_agents_skills_dir(run_cli, tmp_path):
     assert paths == {
         str(tmp_path / "AGENTS.md"),
         str(tmp_path / ".agents" / "skills" / "olira-ingest" / "SKILL.md"),
+        str(tmp_path / ".agents" / "skills" / "olira-logging" / "SKILL.md"),
         str(tmp_path / ".agents" / "skills" / "olira-query" / "SKILL.md"),
         str(tmp_path / ".agents" / "skills" / "olira-setup" / "SKILL.md"),
     }

@@ -1,13 +1,14 @@
-"""olira patients / cohorts / projects / integrations — read-only query commands.
+"""olira patients / cohorts / projects / integrations / log-types — read-only query commands.
 
 Every command here uses the "sdk" credential class (a raw olira_... API
 key) — /v1/* routes reject browser-login JWTs. Patients and cohorts are
-project-scoped (X-Olira-Project header); projects and integrations are
-org-level and take no --project.
+project-scoped (X-Olira-Project header); projects, integrations, and
+log-types are org-level and take no --project.
 """
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from olira_cli import http, output
@@ -379,3 +380,55 @@ def _render_data_points(points: list[dict[str, Any]]) -> None:
         [str(p.get("id", "")), p.get("name", ""), p.get("status", ""), p.get("next_sync_at") or "-"] for p in points
     ]
     output.table(["ID", "NAME", "STATUS", "NEXT SYNC"], rows)
+
+
+# ---------------------------------------------------------------------------
+# Log types
+# ---------------------------------------------------------------------------
+
+
+def cmd_log_types_list(args: Any) -> CommandResult:
+    auth = resolve_auth("sdk", getattr(args, "api_key", None))
+
+    with http.client() as client:
+        r = client.get(f"{api_base(auth)}/v1/log-types", headers=sdk_headers(auth))
+        r.raise_for_status()
+        data = r.json()
+
+    if not output.json_mode():
+        _render_log_type_list(_unwrap(data) or [])
+
+    return CommandResult(data)
+
+
+def _render_log_type_list(log_types: list[dict[str, Any]]) -> None:
+    if not log_types:
+        print("No log types in the catalog.")
+        return
+    rows = [[lt.get("subtype", ""), lt.get("category", ""), lt.get("display_name", "")] for lt in log_types]
+    output.table(["SUBTYPE", "CATEGORY", "DISPLAY NAME"], rows)
+
+
+def cmd_log_types_get(args: Any) -> CommandResult:
+    auth = resolve_auth("sdk", getattr(args, "api_key", None))
+
+    with http.client() as client:
+        r = client.get(f"{api_base(auth)}/v1/log-types/{args.subtype}", headers=sdk_headers(auth))
+        r.raise_for_status()
+        data = r.json()
+
+    if not output.json_mode():
+        _render_log_type(data)
+
+    return CommandResult(data)
+
+
+def _render_log_type(lt: dict[str, Any]) -> None:
+    print(f"  Subtype:     {lt.get('subtype', '')}")
+    print(f"  Category:    {lt.get('category', '')}")
+    if lt.get("aliases"):
+        print(f"  Aliases:     {', '.join(lt['aliases'])}")
+    print(f"  Name:        {lt.get('display_name', '')}")
+    print(f"  Description: {lt.get('description', '')}")
+    print("  Payload schema:")
+    print(json.dumps(lt.get("payload_schema", {}), indent=2))
