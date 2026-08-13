@@ -1,6 +1,6 @@
 > **Maintained by:** Olira Engineering  
 > **Published at:** [docs.olira.ai](https://docs.olira.ai) → CLI tab  
-> **Version:** `1.2.0`
+> **Version:** `1.3.0`
 
 # Olira CLI
 
@@ -80,7 +80,7 @@ This is also what powers `olira init agent` (below).
 - Every place that would otherwise prompt has a flag that answers it up front: `--yes` (`keys revoke`, `ingest cancel`), `--name`/`--scopes` (`keys create`), `--dir` (`configure cursor`), `--init-templates`/`--no-backfill` (`ingest confirm`). Without the flag and without a TTY, the command fails fast (exit `6`, `PROMPT_REQUIRED`) naming the flag to add — it never hangs.
 - Pass **`--timeout SECONDS`** with `--watch` on long-running ingest commands; without it, watching a job that never reaches a terminal state polls forever.
 - **Querying** (`patients`, `state`, `cohorts`, `projects`, `integrations`) is entirely read-only — same API key as ingestion, no writes, no prompts. See each command's section below.
-- **`olira init agent`** writes `AGENTS.md` plus three focused skills (`olira-ingest`/`olira-query`/`olira-setup`) into the current repo — as Claude Code skills and/or the shared `.agents/skills/` format Cursor and Codex both discover from — covering all of the above plus the ingestion state machine, JSONL schema, query commands, and a failure playbook. Point a coding agent at a repo with these files and it can drive the CLI correctly without additional instructions. See [`olira init agent`](#olira-init-agent) below for why it's split this way.
+- **`olira init agent`** writes `AGENTS.md` plus four focused skills (`olira-ingest`/`olira-query`/`olira-setup`/`olira-actions`) into the current repo — as Claude Code skills and/or the shared `.agents/skills/` format Cursor and Codex both discover from — covering all of the above plus the ingestion state machine, JSONL schema, query commands, and a failure playbook. Point a coding agent at a repo with these files and it can drive the CLI correctly without additional instructions. See [`olira init agent`](#olira-init-agent) below for why it's split this way.
 - See [`examples/`](https://github.com/olira-ai/olira-cli/tree/main/examples) in the CLI repo for runnable end-to-end scripts (ingest, query a patient, check integration health) and a full guide on driving this CLI with a coding agent.
 
 ### Environment variables
@@ -202,7 +202,7 @@ same arguments reports `unchanged`.
 
 ### `olira init agent`
 
-Write agent-facing docs into the current repo: `AGENTS.md` plus **three
+Write agent-facing docs into the current repo: `AGENTS.md` plus **four
 focused skills** — split by workflow rather than one monolith, since the
 ingestion state machine is genuinely complex and a "list patients" task
 shouldn't have to load it:
@@ -212,6 +212,7 @@ shouldn't have to load it:
 | `olira-ingest` | The ingestion state machine, missing-template-slots, `--watch`/`--timeout`, the JSONL schema, ingest-specific failure playbook | `<slug>/SKILL.md` |
 | `olira-query` | `patients`/`state`/`cohorts`/`projects`/`integrations` command reference and recipes | `<slug>/SKILL.md` |
 | `olira-setup` | Auth model, scopes, key management, MCP client configuration | `<slug>/SKILL.md` |
+| `olira-actions` | Outbound-action destinations, triggers, digest batching, signature verification — SDK-only, no CLI command | `<slug>/SKILL.md` |
 
 `--claude` writes to `.claude/skills/<slug>/SKILL.md`. `--cursor` and `--codex`
 both write the identical files to `.agents/skills/<slug>/SKILL.md` — the

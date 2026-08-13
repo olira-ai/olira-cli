@@ -7,13 +7,14 @@ Code and Cursor read the identical SKILL.md format (`name` + `description`
 frontmatter under `.claude/skills/<slug>/` or `.cursor/skills/<slug>/`), so
 one file serves both clients — no per-client content fork.
 
-Three focused skills instead of one monolith: `olira-ingest` (the genuinely
+Four focused skills instead of one monolith: `olira-ingest` (the genuinely
 complex workflow — state machine, missing-template-slots, watch/timeout),
-`olira-query` (a comparatively simple command reference), and `olira-setup`
-(auth model, keys, MCP client configuration). A model-invoked skill loads
-only when its description matches the task, so splitting by process means a
-"list patients" task doesn't pull the ingestion state machine into context,
-and vice versa. Cross-cutting content used by every task regardless of
+`olira-query` (a comparatively simple command reference), `olira-setup`
+(auth model, keys, MCP client configuration), and `olira-actions` (outbound
+webhook/email destinations — SDK-only, no CLI command). A model-invoked skill
+loads only when its description matches the task, so splitting by process
+means a "list patients" task doesn't pull the ingestion state machine into
+context, and vice versa. Cross-cutting content used by every task regardless of
 which skill (if any) gets loaded — the auth-class split, the JSON envelope,
 the full exit-code table — stays in the AGENTS.md digest, which most agents
 load unconditionally; skills reference it rather than repeat it. AGENTS.md
@@ -30,7 +31,7 @@ from typing import Any
 from olira_cli import __version__, output
 from olira_cli.errors import CliError, CommandResult
 
-_SKILL_SLUGS = ("olira-ingest", "olira-query", "olira-setup")
+_SKILL_SLUGS = ("olira-ingest", "olira-query", "olira-setup", "olira-actions")
 
 _MARKER_BEGIN = "<!-- BEGIN olira-cli (managed by 'olira init agent', v{version}) -->"
 _MARKER_END = "<!-- END olira-cli -->"
@@ -68,12 +69,14 @@ def _agents_md_block(version: str) -> str:
 Installed as `olira`. Full reference, split by workflow (also readable
 directly under `.claude/skills/<name>/SKILL.md` or `.agents/skills/<name>/SKILL.md`):
 `olira-ingest` (historical ingestion), `olira-query` (read-only querying),
-`olira-setup` (auth, keys, MCP configuration).
+`olira-setup` (auth, keys, MCP configuration), `olira-actions` (outbound
+webhook/email destinations — SDK-only, no CLI command).
 
 - Auth: `OLIRA_API_KEY=olira_...` for `ingest`/`validate --check-org`/`patients`/`state`/`cohorts`/`projects`/`integrations`; browser login (`olira login`, human-only) for `keys`/`configure cursor`.
 - Always pass `--json`. With `--watch`, pass a SHORT `--timeout` (e.g. `60`-`120`) — it bounds how long *this call* blocks, not the job's real duration. Ingestion can legitimately run for hours; on exit `8` (`WATCH_TIMEOUT`) the job is still running — report progress and re-check with a later, non-watching `status` call instead of re-watching with a bigger timeout.
 - Never rely on interactive prompts — pass `--yes`/`--name`/`--scopes`/`--init-templates`/`--no-backfill`/`--dir` up front.
 - Read-only querying: `olira patients`/`state`/`cohorts`/`projects`/`integrations` — no writes, no prompts, same API key as ingestion.
+- Outbound actions (destinations, triggers, digest batching, delivery verification) has no `olira` CLI command — it's SDK-only. See `olira-actions`.
 
 {_EXIT_CODE_TABLE}
 {_MARKER_END}

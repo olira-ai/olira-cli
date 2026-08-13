@@ -36,13 +36,14 @@ export OLIRA_API_KEY=olira_...
 olira init agent
 ```
 
-This writes `AGENTS.md` plus three focused skills — `olira-ingest`,
-`olira-query`, `olira-setup` — as `.claude/skills/<name>/SKILL.md` for Claude
+This writes `AGENTS.md` plus four focused skills — `olira-ingest`,
+`olira-query`, `olira-setup`, `olira-actions` — as `.claude/skills/<name>/SKILL.md` for Claude
 Code and `.agents/skills/<name>/SKILL.md` for Cursor and Codex, the shared
 location both of those discover skills from. `AGENTS.md` covers the auth
 model, the `--json` envelope, and the full exit-code table; each skill
 covers only its own workflow (the ingestion state machine, the read-only
-query commands, or key management) so a task only loads what it needs.
+query commands, key management, or outbound-action destinations via the SDK)
+so a task only loads what it needs.
 Most agents (Claude Code, Cursor, Codex) pick these up automatically; if
 yours doesn't, point it at `AGENTS.md` directly.
 
@@ -64,6 +65,9 @@ Some things to try:
   this one should make your agent stop and tell you it needs your help,
   since key management requires a browser login it can't do itself. That's
   the CLI working as intended, not a bug.
+- *"Register a webhook destination for `patient.state.changed`."* — there
+  is no `olira actions` subcommand; the agent should reach for the Python
+  or C# SDK (`sdk:actions`) instead.
 
 ## What correct agent behavior looks like
 

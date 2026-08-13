@@ -159,7 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     init_agent = init_sub.add_parser(
         "agent",
-        help="Write AGENTS.md plus per-workflow skills (olira-ingest, olira-query, olira-setup)",
+        help="Write AGENTS.md plus per-workflow skills (olira-ingest, olira-query, olira-setup, olira-actions)",
         parents=[common],
     )
     init_agent.add_argument("--claude", action="store_true", help="Write the skills under .claude/skills/")

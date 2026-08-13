@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from tests.conftest import json_envelope
 
-_SKILLS = ["olira-ingest", "olira-query", "olira-setup"]
+_SKILLS = ["olira-ingest", "olira-query", "olira-setup", "olira-actions"]
 
 
 def test_init_agent_creates_all_files(run_cli, tmp_path):
@@ -70,6 +70,7 @@ def test_init_agent_skills_are_independently_focused(run_cli, tmp_path):
     ingest = (tmp_path / ".claude" / "skills" / "olira-ingest" / "SKILL.md").read_text()
     query = (tmp_path / ".claude" / "skills" / "olira-query" / "SKILL.md").read_text()
     setup = (tmp_path / ".claude" / "skills" / "olira-setup" / "SKILL.md").read_text()
+    actions = (tmp_path / ".claude" / "skills" / "olira-actions" / "SKILL.md").read_text()
 
     assert "name: olira-ingest" in ingest
     assert "AWAITING_CONFIRMATION" in ingest.upper() or "awaiting_confirmation" in ingest
@@ -82,6 +83,16 @@ def test_init_agent_skills_are_independently_focused(run_cli, tmp_path):
     assert "name: olira-setup" in setup
     assert "keys create" in setup
     assert "AWAITING_CONFIRMATION".lower() not in setup.lower()
+
+    assert "name: olira-actions" in actions
+    assert "Olira-Signature" in actions
+    assert "EmailDestinationConfig" in actions
+    assert "localhost" in actions
+    assert "webhookConfig" in actions
+    assert "using System.Linq;" in actions
+    assert "olira patients list" not in actions
+    assert "AWAITING_CONFIRMATION".lower() not in actions.lower()
+    assert "keys create" not in actions
 
 
 def test_init_agent_skill_content_has_no_unsubstituted_placeholder(run_cli, tmp_path):

@@ -105,7 +105,7 @@ with an API key via `OLIRA_API_KEY`, not by logging in.
 | `olira configure cursor` | Write the MCP server entry into `mcp.json` with your current login token. Prefers `.cursor/` in the current directory. |
 | `olira configure claude` | Write a project-scoped MCP server entry into `.mcp.json` for Claude Code. No login needed — references an env var, never a literal token. |
 | `olira configure codex` | Same, for Codex CLI (`.codex/config.toml`). |
-| `olira init agent` | Write agent-facing docs into the current repo: `AGENTS.md` plus three focused skills (ingest, query, setup) for Claude Code and/or Cursor/Codex. |
+| `olira init agent` | Write agent-facing docs into the current repo: `AGENTS.md` plus four focused skills (ingest, query, setup, actions) for Claude Code and/or Cursor/Codex. |
 | `olira keys create` | Create an API key (interactive wizard). Use `--name` and `--scopes` to skip prompts. |
 | `olira keys list` | List API keys for your organization, including their scopes. |
 | `olira keys revoke <name-or-id>` | Permanently revoke an API key. Use `--yes` to skip the confirmation prompt. |
@@ -127,16 +127,17 @@ exit-code contract.
 There are two independent things you might want an agent to do, and two
 commands for them:
 
-**Teach your agent to drive this CLI** (validate/upload historical data,
-manage keys, read job status) — run once, in the repo the agent works in:
+**Teach your agent to drive this CLI and the outbound-actions SDK**
+(validate/upload historical data, manage keys, read job status, register
+webhook/email destinations) — run once, in the repo the agent works in:
 
 ```bash
 olira init agent
 ```
 
-This writes `AGENTS.md` plus **three focused skills** — `olira-ingest`,
-`olira-query`, `olira-setup` — as `.claude/skills/<name>/SKILL.md` for Claude
-Code and `.agents/skills/<name>/SKILL.md` for Cursor and Codex, which both
+This writes `AGENTS.md` plus **four focused skills** — `olira-ingest`,
+`olira-query`, `olira-setup`, `olira-actions` — as `.claude/skills/<name>/SKILL.md`
+for Claude Code and `.agents/skills/<name>/SKILL.md` for Cursor and Codex, which both
 discover skills from that shared, vendor-neutral location (`--cursor` and
 `--codex` write the identical files there — pass either). Split by workflow
 rather than one monolith because the ingestion state machine is genuinely
