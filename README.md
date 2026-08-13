@@ -116,6 +116,8 @@ with an API key via `OLIRA_API_KEY`, not by logging in.
 | `olira cohorts list` / `get <id>` / `templates <id>` | Query cohorts (read-only). |
 | `olira projects list` / `get <id_or_slug>` | Query projects (read-only; org-wide key). |
 | `olira integrations catalog\|list\|get\|data-points` | Query EHR integrations (read-only). |
+| `olira actions create-destination\|list-destinations\|get-destination\|update-destination\|delete-destination\|rotate-destination-secret` | Manage outbound-action webhook/email destinations. |
+| `olira actions list-deliveries\|get-delivery\|redeliver-delivery` | Inspect and redeliver from the delivery ledger. |
 
 Every command accepts `--json` for machine-readable output — see
 [Using the CLI from a coding agent](#using-the-cli-from-a-coding-agent) and
@@ -127,9 +129,10 @@ exit-code contract.
 There are two independent things you might want an agent to do, and two
 commands for them:
 
-**Teach your agent to drive this CLI and the outbound-actions SDK**
+**Teach your agent to drive this CLI**
 (validate/upload historical data, manage keys, read job status, register
-webhook/email destinations) — run once, in the repo the agent works in:
+webhook/email destinations, verify delivery signatures) — run once, in the
+repo the agent works in:
 
 ```bash
 olira init agent
@@ -178,6 +181,7 @@ When creating an API key you will be prompted to select one or more scopes:
 | `sdk:integrations` | Manage EHR integrations — catalog, connect/disconnect, data-point subscriptions, sync status (control-plane only, no write-back) |
 | `sdk:integration-write` | Honor the `write_back` flag on logged events for EHR write-back |
 | `api:manage-projects` | Create, list, rename, and deprecate projects; requires an org-wide key |
+| `sdk:actions` | Manage outbound-action destinations and their signing secrets; read/redeliver delivery history |
 
 This list matches [docs.olira.ai/cli/scopes](https://docs.olira.ai/cli/scopes) — treat that page as canonical if the two ever disagree.
 
@@ -190,8 +194,8 @@ Tokens expire after ~24 hours. Re-run `olira login` to refresh; if you still hav
 API keys never expire and are not stored locally — they live in the platform and can be revoked with `olira keys revoke`.
 
 Two credential types exist and are not interchangeable: `olira ingest *`,
-`olira validate --check-org`, and the read-only query commands (`patients`,
-`state`, `cohorts`, `projects`, `integrations`) all need an API key
+`olira validate --check-org`, the read-only query commands (`patients`,
+`state`, `cohorts`, `projects`, `integrations`), and `olira actions *` all need an API key
 (`OLIRA_API_KEY` or `--api-key`); `olira keys *` and `olira configure cursor`
 need a browser login instead. `olira configure claude`/`olira configure
 codex` need neither — they write a config that references an env var

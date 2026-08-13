@@ -41,7 +41,7 @@ olira keys revoke <name-or-id> --yes
 
 Two independent things, don't confuse them:
 
-- **`olira init agent`** writes the skills you're reading now (`olira-ingest`/`olira-query`/`olira-setup`/`olira-actions`) plus `AGENTS.md` — teaches an agent to drive the CLI's commands and use the outbound-actions SDK.
+- **`olira init agent`** writes the skills you're reading now (`olira-ingest`/`olira-query`/`olira-setup`/`olira-actions`) plus `AGENTS.md` — teaches an agent to drive the CLI's commands (including `olira actions *`) and to verify webhook signatures in the receiving server (SDK-only).
 - **`olira configure cursor` / `configure claude` / `configure codex`** connect that client's *own* MCP tool access to Olira's MCP server (for querying patient state as a tool, not by shelling out to the CLI). `configure cursor` needs a browser login and embeds the current token; `configure claude`/`configure codex` need no auth to run and never write a secret to disk — both reference an env var (`OLIRA_API_KEY` by default, override with `--api-key-env`) that must be exported wherever that client actually runs, scoped to `mcp:patient-state`.
 
 ## Golden rules for this workflow

@@ -65,9 +65,10 @@ Some things to try:
   this one should make your agent stop and tell you it needs your help,
   since key management requires a browser login it can't do itself. That's
   the CLI working as intended, not a bug.
-- *"Register a webhook destination for `patient.state.changed`."* — there
-  is no `olira actions` subcommand; the agent should reach for the Python
-  or C# SDK (`sdk:actions`) instead.
+- *"Register a webhook destination for `patient.state.changed`."* — should
+  run `olira actions create-destination --url ... --triggers patient.state.changed`
+  (scope `sdk:actions`). Verifying the webhook signature is still SDK-only;
+  it runs in the receiving server, not the CLI.
 
 ## What correct agent behavior looks like
 

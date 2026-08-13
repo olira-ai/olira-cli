@@ -151,7 +151,7 @@ Create a new API key
 | Flag       | Description                                                                                                                                                                                                                               |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--name`   | Key name (skips the interactive prompt).                                                                                                                                                                                                  |
-| `--scopes` | Scopes to grant (space-separated). Skips the interactive picker. Valid: `mcp:patient-state`, `sdk:event-log`, `sdk:patient-token`, `api:manage-patients`, `api:org-config`, `sdk:state-read`, `sdk:historical-ingest`, `sdk:integrations`, `sdk:integration-write`, `api:manage-projects`. |
+| `--scopes` | Scopes to grant (space-separated). Skips the interactive picker. Valid: `mcp:patient-state`, `sdk:event-log`, `sdk:patient-token`, `api:manage-patients`, `api:org-config`, `sdk:state-read`, `sdk:historical-ingest`, `sdk:integrations`, `sdk:integration-write`, `api:manage-projects`, `sdk:actions`. |
 
 ### `olira keys list`
 
@@ -212,7 +212,7 @@ shouldn't have to load it:
 | `olira-ingest` | The ingestion state machine, missing-template-slots, `--watch`/`--timeout`, the JSONL schema, ingest-specific failure playbook | `<slug>/SKILL.md` |
 | `olira-query` | `patients`/`state`/`cohorts`/`projects`/`integrations` command reference and recipes | `<slug>/SKILL.md` |
 | `olira-setup` | Auth model, scopes, key management, MCP client configuration | `<slug>/SKILL.md` |
-| `olira-actions` | Outbound-action destinations, triggers, digest batching, signature verification — SDK-only, no CLI command | `<slug>/SKILL.md` |
+| `olira-actions` | Outbound-action destinations, triggers, digest batching, and deliveries (`olira actions *`); signature verification is SDK-only (runs in your receiver, not the CLI) | `<slug>/SKILL.md` |
 
 `--claude` writes to `.claude/skills/<slug>/SKILL.md`. `--cursor` and `--codex`
 both write the identical files to `.agents/skills/<slug>/SKILL.md` — the
@@ -524,6 +524,31 @@ olira integrations data-points <integration_id>            # subscribed data poi
 olira integrations data-points <integration_id> --catalog  # data points available to subscribe
 ```
 
+### `olira actions`
+
+Outbound-action destinations (webhook/email) and the delivery ledger. Requires an API key with `sdk:actions` scope. See the [`olira-actions`](#olira-init-agent) skill for the full trigger vocabulary, digest batching, and HMAC signature verification (the one piece with no CLI command, since it runs in *your* receiving server).
+
+```bash
+# Destinations
+olira actions create-destination --url <url> --triggers <t1,t2,...> [--description ...] \
+  [--header KEY=VALUE ...] [--rate-limit N] \
+  [--digest-time-of-day HH:MM --digest-timezone TZ --digest-triggers <t1,...>]
+olira actions create-destination --to-email <email> [--subject ...] [--from-name ...] --triggers <t1,...>
+olira actions list-destinations
+olira actions get-destination <destination_id>
+olira actions update-destination <destination_id> [--url ...] [--to-email ...] [--triggers ...] \
+  [--status active|disabled] [--clear-digest-schedule]
+olira actions delete-destination <destination_id> [--yes]
+olira actions rotate-destination-secret <destination_id>
+
+# Deliveries
+olira actions list-deliveries [--destination-id ...] [--status ...] [--trigger ...] [--cursor ...] [--limit N]
+olira actions get-delivery <delivery_id>
+olira actions redeliver-delivery <delivery_id>
+```
+
+`create-destination` takes exactly one of `--url` (webhook) or `--to-email` (email), and requires `--triggers` (at least one trigger, or `*` for all). The signing secret is printed once, at creation (and again on rotate) — store it immediately, it cannot be read back. `update-destination` is a flat PATCH: only the flags you pass are sent; `--clear-digest-schedule` sends an explicit null to turn batching off, distinct from omitting every `--digest-*` flag (which leaves the current setting unchanged). `delete-destination` disables the destination and dead-letters its pending/retrying deliveries — confirms interactively unless `--yes` is passed. `redeliver-delivery` resends the exact original bytes and returns `409` (exit `6`) if the destination is currently disabled.
+
 ## Scopes
 
 Scopes are granted at API key creation and cannot be changed afterwards.
@@ -541,6 +566,7 @@ Each scope grants access to one set of Olira endpoints.
 | `sdk:integrations`      | Manage EHR integrations — catalog, connect/disconnect, data-point subscriptions, sync status (control-plane only, no write-back) |
 | `sdk:integration-write` | Honor the `write_back` flag on logged events for EHR write-back                   |
 | `api:manage-projects`   | Create, list, rename, and deprecate projects; requires an org-wide key            |
+| `sdk:actions`           | Manage outbound-action destinations and their signing secrets; read/redeliver delivery history |
 
 Use `olira keys create --scopes mcp:patient-state sdk:event-log ...` to grant specific
 scopes non-interactively, or omit `--scopes` to use the interactive picker.

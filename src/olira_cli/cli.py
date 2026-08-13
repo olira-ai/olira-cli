@@ -107,7 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Scopes to grant (space-separated). Skips the interactive picker. "
             "Valid: mcp:patient-state, sdk:event-log, sdk:patient-token, "
             "api:manage-patients, api:org-config, sdk:state-read, sdk:historical-ingest, "
-            "sdk:integrations, sdk:integration-write, api:manage-projects."
+            "sdk:integrations, sdk:integration-write, api:manage-projects, sdk:actions."
         ),
     )
     keys_sub.add_parser("list", help="List API keys for your organization", parents=[common])
@@ -331,6 +331,7 @@ def build_parser() -> argparse.ArgumentParser:
     _build_cohorts_parser(subparsers, common)
     _build_projects_parser(subparsers, common)
     _build_integrations_parser(subparsers, common)
+    _build_actions_parser(subparsers, common)
 
     return parser
 
@@ -460,6 +461,103 @@ def _build_integrations_parser(subparsers: Any, common: argparse.ArgumentParser)
     )
 
 
+def _add_digest_flags(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--digest-time-of-day", default=None, metavar="HH:MM", help="Batch time, on a half-hour boundary")
+    p.add_argument("--digest-timezone", default=None, metavar="TZ", help="IANA timezone, e.g. America/New_York")
+    p.add_argument(
+        "--digest-triggers",
+        default=None,
+        metavar="TRIGGERS",
+        help="Comma-separated subset of --triggers to batch (all three --digest-* flags required together)",
+    )
+
+
+def _build_actions_parser(subparsers: Any, common: argparse.ArgumentParser) -> None:
+    actions_parser = subparsers.add_parser(
+        "actions", help="Manage outbound-action destinations and deliveries", parents=[common]
+    )
+    actions_sub = actions_parser.add_subparsers(dest="actions_command", help="actions subcommands")
+
+    create = actions_sub.add_parser(
+        "create-destination", help="Register a webhook or email destination", parents=[common]
+    )
+    create.add_argument("--url", default=None, help="Webhook URL (mutually exclusive with --to-email)")
+    create.add_argument("--to-email", default=None, help="Email recipient (mutually exclusive with --url)")
+    create.add_argument("--subject", default=None, help="Email destinations only")
+    create.add_argument("--from-name", default=None, help="Email destinations only")
+    create.add_argument(
+        "--triggers",
+        default=None,
+        metavar="TRIGGERS",
+        help='Required. Comma-separated triggers, or "*" for all',
+    )
+    create.add_argument("--description", default=None)
+    create.add_argument(
+        "--header", action="append", default=None, metavar="KEY=VALUE", help="Static header, repeatable"
+    )
+    create.add_argument("--rate-limit", type=int, default=None, metavar="N", help="Deliveries/min, 1-6000")
+    _add_digest_flags(create)
+    create.add_argument("--project", default=None, help="Project id or slug (org-wide keys only)")
+
+    actions_sub.add_parser("list-destinations", help="List action destinations", parents=[common]).add_argument(
+        "--project", default=None, help="Project id or slug (org-wide keys only)"
+    )
+
+    get_dest = actions_sub.add_parser("get-destination", help="Get a single destination", parents=[common])
+    get_dest.add_argument("destination_id", help="Destination id")
+    get_dest.add_argument("--project", default=None, help="Project id or slug (org-wide keys only)")
+
+    update = actions_sub.add_parser("update-destination", help="Update a destination", parents=[common])
+    update.add_argument("destination_id", help="Destination id")
+    update.add_argument("--url", default=None, help="Webhook destinations only")
+    update.add_argument("--to-email", default=None, help="Email destinations only")
+    update.add_argument("--subject", default=None, help="Email destinations only")
+    update.add_argument("--description", default=None)
+    update.add_argument("--triggers", default=None, metavar="TRIGGERS", help="Replaces the full subscription list")
+    update.add_argument("--status", default=None, choices=["active", "disabled"])
+    update.add_argument(
+        "--header", action="append", default=None, metavar="KEY=VALUE", help="Static header, repeatable; replaces all"
+    )
+    _add_digest_flags(update)
+    update.add_argument(
+        "--clear-digest-schedule", action="store_true", help="Turn off digest batching (back to immediate delivery)"
+    )
+    update.add_argument("--project", default=None, help="Project id or slug (org-wide keys only)")
+
+    delete = actions_sub.add_parser("delete-destination", help="Disable a destination", parents=[common])
+    delete.add_argument("destination_id", help="Destination id")
+    delete.add_argument("--yes", action="store_true", help="Skip the confirmation prompt")
+    delete.add_argument("--project", default=None, help="Project id or slug (org-wide keys only)")
+
+    rotate = actions_sub.add_parser(
+        "rotate-destination-secret", help="Rotate the signing secret (reveal-once)", parents=[common]
+    )
+    rotate.add_argument("destination_id", help="Destination id")
+    rotate.add_argument("--project", default=None, help="Project id or slug (org-wide keys only)")
+
+    list_deliveries = actions_sub.add_parser(
+        "list-deliveries", help="List deliveries (cursor-paginated)", parents=[common]
+    )
+    list_deliveries.add_argument("--destination-id", default=None)
+    list_deliveries.add_argument("--status", default=None)
+    list_deliveries.add_argument("--trigger", default=None)
+    list_deliveries.add_argument("--cursor", default=None)
+    list_deliveries.add_argument("--limit", type=int, default=50, help="Max results, 1-200 (default: 50)")
+    list_deliveries.add_argument("--project", default=None, help="Project id or slug (org-wide keys only)")
+
+    get_delivery = actions_sub.add_parser(
+        "get-delivery", help="Get one delivery's full attempt history", parents=[common]
+    )
+    get_delivery.add_argument("delivery_id", help="Delivery id")
+    get_delivery.add_argument("--project", default=None, help="Project id or slug (org-wide keys only)")
+
+    redeliver = actions_sub.add_parser(
+        "redeliver-delivery", help="Resend a delivery's original bytes", parents=[common]
+    )
+    redeliver.add_argument("delivery_id", help="Delivery id")
+    redeliver.add_argument("--project", default=None, help="Project id or slug (org-wide keys only)")
+
+
 _VALID_ENVS = {"dev", "stage", "prod", "local"}
 _PUBLIC_ENVS = {"dev", "stage", "prod"}
 
@@ -476,6 +574,7 @@ def _command_name(args: argparse.Namespace) -> str:
         or getattr(args, "cohorts_command", None)
         or getattr(args, "projects_command", None)
         or getattr(args, "integrations_command", None)
+        or getattr(args, "actions_command", None)
     )
     return f"{command}.{sub}" if sub else command
 
@@ -517,6 +616,8 @@ def _dispatch(args: argparse.Namespace) -> CommandResult:
         return _cmd_projects(args)
     if args.command == "integrations":
         return _cmd_integrations(args)
+    if args.command == "actions":
+        return _cmd_actions(args)
     raise CliError("Unknown command.", code="USAGE", exit_code=2)
 
 
@@ -659,6 +760,42 @@ def _cmd_integrations(args: argparse.Namespace) -> CommandResult:
     sub = getattr(args, "integrations_command", None)
     if sub not in dispatch:
         raise CliError("Usage: olira integrations {catalog|list|get|data-points}", code="USAGE", exit_code=2)
+    return dispatch[sub](args)
+
+
+def _cmd_actions(args: argparse.Namespace) -> CommandResult:
+    from olira_cli.actions import (
+        cmd_create_destination,
+        cmd_delete_destination,
+        cmd_get_delivery,
+        cmd_get_destination,
+        cmd_list_deliveries,
+        cmd_list_destinations,
+        cmd_redeliver_delivery,
+        cmd_rotate_destination_secret,
+        cmd_update_destination,
+    )
+
+    dispatch: dict[str, Any] = {
+        "create-destination": cmd_create_destination,
+        "list-destinations": cmd_list_destinations,
+        "get-destination": cmd_get_destination,
+        "update-destination": cmd_update_destination,
+        "delete-destination": cmd_delete_destination,
+        "rotate-destination-secret": cmd_rotate_destination_secret,
+        "list-deliveries": cmd_list_deliveries,
+        "get-delivery": cmd_get_delivery,
+        "redeliver-delivery": cmd_redeliver_delivery,
+    }
+    sub = getattr(args, "actions_command", None)
+    if sub not in dispatch:
+        raise CliError(
+            "Usage: olira actions {create-destination|list-destinations|get-destination|"
+            "update-destination|delete-destination|rotate-destination-secret|"
+            "list-deliveries|get-delivery|redeliver-delivery}",
+            code="USAGE",
+            exit_code=2,
+        )
     return dispatch[sub](args)
 
 

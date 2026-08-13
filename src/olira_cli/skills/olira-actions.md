@@ -1,20 +1,36 @@
 ---
 name: olira-actions
-description: Register outbound-action webhook or email destinations, subscribe them to triggers, set up digest batching, verify Olira-Signature HMAC on webhook deliveries, and rotate signing secrets — via the Olira SDK (Python or C#), not the `olira` CLI (there is no CLI command for this).
+description: Manage outbound-action webhook/email destinations, triggers, digest batching, and the delivery ledger via `olira actions` — plus how to verify Olira-Signature HMAC on webhook deliveries in your own receiving server (Python or C# SDK, no CLI command for that part).
 ---
 
 # Olira Outbound Actions
 
-Installed as `olira` (verify with `olira --version`; this doc matches v{{VERSION}}),
-but outbound actions has **no `olira` CLI command** — there is no shell equivalent
-to reach for here. Everything below is
-Python (`olira` on PyPI) or C# (`Olira` on NuGet) SDK code, or a raw REST call
-under `/v1/actions/*`. If a task needs a destination created, a trigger changed,
-or a delivery inspected, write or run SDK code — don't look for an `olira actions`
-subcommand, it doesn't exist.
+Installed as `olira` (verify with `olira --version`; this doc matches v{{VERSION}}).
+Destination and delivery management has a full CLI command group, `olira actions
+*` — same shape as `olira patients`/`olira cohorts`, but with writes. Auth is the
+same **API key** class as every other `/v1/*` command (see `olira-setup`),
+scoped `sdk:actions`. Same `--project`/`OLIRA_PROJECT` convention as
+`patients`/`cohorts` if you're on a non-default project.
 
-Auth for this surface is the same **API key** class as every other Olira SDK
-call (see `olira-setup`), scoped `sdk:actions`.
+Signature **verification** is the one piece with no CLI command — it runs
+inside the server *receiving* Olira's webhook, not something you'd invoke from
+a shell. That part is SDK code (Python or C#) you paste into your own
+receiver; see [Verifying webhook deliveries](#verifying-webhook-deliveries)
+below.
+
+## CLI commands
+
+| Command | Purpose |
+|---|---|
+| `olira actions create-destination` | Register a webhook (`--url`) or email (`--to-email`) destination; `--triggers` is required |
+| `olira actions list-destinations` | List destinations |
+| `olira actions get-destination <id>` | Get one destination |
+| `olira actions update-destination <id>` | Change url/email/triggers/status/digest schedule |
+| `olira actions delete-destination <id>` | Disable a destination (`--yes` to skip the confirmation prompt) |
+| `olira actions rotate-destination-secret <id>` | Reveal-once new secret; old one stays valid 24h |
+| `olira actions list-deliveries` | Cursor-paginated delivery ledger, filterable |
+| `olira actions get-delivery <id>` | Full attempt history for one delivery |
+| `olira actions redeliver-delivery <id>` | Resend the exact original bytes; 409 if the destination is disabled |
 
 ## Destinations and triggers
 
@@ -29,18 +45,28 @@ event that causes a delivery to it. Currently available triggers:
 | `ingestion.completed` | A historical ingestion job you started finished successfully |
 | `ingestion.failed` | A historical ingestion job you started did not finish successfully |
 
-Pass `["*"]` (or `ActionTrigger.ALL` / `ActionTrigger.All`) to subscribe to every
-currently available trigger. Because `"*"` is evaluated by the platform rather
-than by this list, a `"*"` subscription could start receiving additional trigger
-types later without another call. Nothing validates a trigger client-side — a
-typo'd string still reaches the server as a 422.
+`--triggers` is required. Pass `"*"` to subscribe to every currently available
+trigger. Because `"*"` is evaluated by the platform rather than by this list, a
+`"*"` subscription could start receiving additional trigger types later without
+another call. Nothing validates a trigger client-side — a typo'd string still
+reaches the server as a 422.
 
-Python takes `config=` (one of the two config classes below). C# takes
-`webhookConfig:` **or** `emailConfig:`, never both, never a unified `config:`.
-
-A webhook `url` must be public HTTPS. `http://`, `localhost`, and
+A webhook `--url` must be public HTTPS. `http://`, `localhost`, and
 private/internal addresses are rejected, both when you set the URL and again
 every time Olira sends to it — do not use `http://localhost:...`.
+
+```bash
+olira actions create-destination \
+  --url https://hooks.example.com/olira \
+  --triggers patient.state.changed,ingestion.failed \
+  --description "acme prod"
+# Signing secret is printed once — store it now, it cannot be read back.
+
+olira actions create-destination --to-email ops@acme.example --triggers ingestion.failed
+```
+
+Equivalent SDK code, if you're provisioning a destination from inside your own
+application rather than the shell:
 
 ```python
 import olira
@@ -53,12 +79,6 @@ destination = olira.create_action_destination(
     subscribed_triggers=[ActionTrigger.PATIENT_STATE_CHANGED, ActionTrigger.INGESTION_FAILED],
 )
 print(destination.signing_secret)  # shown once, store it now
-
-email_destination = olira.create_action_destination(
-    config=EmailDestinationConfig(to_email="ops@acme.example"),
-    subscribed_triggers=[ActionTrigger.INGESTION_FAILED],
-)
-print(email_destination.signing_secret)  # shown once, store it now
 ```
 
 ```csharp
@@ -70,17 +90,12 @@ var destination = OliraModule.CreateActionDestination(
     webhookConfig: new WebhookDestinationConfig { Url = "https://hooks.example.com/olira" },
     subscribedTriggers: [ActionTrigger.PatientStateChanged, ActionTrigger.IngestionFailed]);
 Console.WriteLine(destination.SigningSecret); // shown once, store it now
-
-var emailDestination = OliraModule.CreateActionDestination(
-    emailConfig: new EmailDestinationConfig { ToEmail = "ops@acme.example" },
-    subscribedTriggers: [ActionTrigger.IngestionFailed]);
-Console.WriteLine(emailDestination.SigningSecret); // shown once, store it now
 ```
 
-The signing secret is returned once, at creation. Store it immediately — it can
-be rotated later (`rotate_action_destination_secret` / `RotateActionDestinationSecret`)
-but never read back. During rotation the old secret stays valid for 24 hours
-(the `Olira-Signature` header carries both).
+The signing secret is returned once, at creation. Store it immediately — it
+can be rotated later (`olira actions rotate-destination-secret <id>`) but
+never read back. During rotation the old secret stays valid for 24 hours (the
+`Olira-Signature` header carries both).
 
 ## Delivery volume: one per event, by default
 
@@ -94,7 +109,24 @@ volume surprises someone.
 ## Digest batching
 
 Opt a destination into batching a trigger's deliveries into one summary per day
-instead of one per event, via `digest_schedule` / `digestSchedule`:
+instead of one per event. All three `--digest-*` flags are required together:
+
+```bash
+olira actions update-destination dest-1 \
+  --digest-time-of-day 09:00 \
+  --digest-timezone America/New_York \
+  --digest-triggers patient.state.changed
+```
+
+Turn batching back off with `--clear-digest-schedule` (sends an explicit null,
+distinct from omitting the flags entirely, which leaves the current setting
+unchanged):
+
+```bash
+olira actions update-destination dest-1 --clear-digest-schedule
+```
+
+Equivalent SDK code:
 
 ```python
 from olira import DigestSchedule
@@ -124,20 +156,22 @@ OliraModule.UpdateActionDestination(
 `RECOMMENDED_DIGEST_TRIGGERS` / `ActionTrigger.RecommendedDigestTriggers` names
 it explicitly. The other triggers are already low-frequency enough that
 immediate delivery works well. Digest deliveries aren't instant: a trigger
-enabled for batching sits buffered until the destination's `time_of_day` /
-`TimeOfDay` next arrives in its timezone, which can be close to a full day
-later — don't poll for a quick result the way you would for an immediate
-trigger.
+enabled for batching sits buffered until the destination's time-of-day next
+arrives in its timezone, which can be close to a full day later — don't poll
+for a quick result the way you would for an immediate trigger.
 
 ## Verifying webhook deliveries
 
 Webhook deliveries carry an `Olira-Signature` header: `t=<unix_ts>,v1=<hex_hmac>`.
-Email deliveries do not — skip this section for email. Recompute the HMAC with
-the destination's signing secret and compare. Reject a missing or malformed
-timestamp, one too far in the past (replay), or one unreasonably far in the
-future (clock skew or forgery) **before** checking the signature at all. During
-secret rotation the header carries **two** `v1=` entries; check if any matches,
-don't assume there's exactly one.
+Email deliveries do not — skip this section for email. This runs in **your**
+receiving server, so there's no `olira actions` command for it — write this
+into the endpoint that accepts the webhook POST.
+
+Recompute the HMAC with the destination's signing secret and compare. Reject a
+missing or malformed timestamp, one too far in the past (replay), or one
+unreasonably far in the future (clock skew or forgery) **before** checking the
+signature at all. During secret rotation the header carries **two** `v1=`
+entries; check if any matches, don't assume there's exactly one.
 
 Copy this function as-is. Do not reimplement it from the description above.
 
@@ -207,6 +241,13 @@ Request.Body.Position = 0;
 ```
 
 ## Inspecting and redelivering
+
+```bash
+olira actions list-deliveries --destination-id dest-1 --status dead_letter --json
+olira actions redeliver-delivery del-1  # 409 if the destination is disabled — re-enable it first
+```
+
+Equivalent SDK code:
 
 ```python
 deliveries = olira.list_action_deliveries(destination_id=destination.id, status="dead_letter")

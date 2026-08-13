@@ -9,11 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `olira-actions` skill for `olira init agent` — outbound-action destinations,
-  triggers, digest batching, and delivery-signature verification. SDK-only
-  (no CLI command exists for this); the skill teaches an agent to reach for
-  the Python/C# SDK directly instead of looking for a shell subcommand.
-- `sdk:actions` scope documented in the `olira-setup` skill's scope table.
+- `olira actions` command group: `create-destination`, `list-destinations`,
+  `get-destination`, `update-destination`, `delete-destination`,
+  `rotate-destination-secret`, `list-deliveries`, `get-delivery`,
+  `redeliver-delivery` — manage outbound-action webhook/email
+  destinations and inspect/redeliver from the delivery ledger, without
+  writing SDK code.
+- `olira-actions` skill for `olira init agent` — the `olira actions *`
+  commands above, plus digest batching and delivery-signature verification
+  (the one piece that stays SDK-only, since it runs in your receiving
+  server, not the CLI).
+- `sdk:actions` scope documented in the `olira-setup` skill's scope table
+  and in `CLI_DOCUMENTATION.md`/`README.md`.
 
 ## [1.2.0] - 2026-08-10
 
