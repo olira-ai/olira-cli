@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `olira-actions` skill for `olira init agent` — the `olira actions *`
   commands above, plus digest batching and delivery-signature verification
   (the one piece that stays SDK-only, since it runs in your receiving
-  server, not the CLI).
+  server, not the CLI). Trigger table includes `integration.sync.failed`.
 - `sdk:actions` scope documented in the `olira-setup` skill's scope table
   and in `CLI_DOCUMENTATION.md`/`README.md`.
 

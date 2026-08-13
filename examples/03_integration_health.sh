@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Check every connected EHR integration for failing data-point syncs.
+# Check every connected integration for failing data-point syncs.
 #
 # Usage:
 #   export OLIRA_API_KEY=olira_...   # needs sdk:integrations scope

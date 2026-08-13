@@ -202,7 +202,7 @@ same arguments reports `unchanged`.
 
 ### `olira init agent`
 
-Write agent-facing docs into the current repo: `AGENTS.md` plus **four
+Write agent-facing docs into the current repo: `AGENTS.md` plus **five
 focused skills** — split by workflow rather than one monolith, since the
 ingestion state machine is genuinely complex and a "list patients" task
 shouldn't have to load it:
@@ -515,7 +515,7 @@ olira projects get <id_or_slug>
 
 ### `olira integrations`
 
-Read-only EHR integration queries. Requires an API key with `sdk:integrations` scope.
+Read-only integration queries. Requires an API key with `sdk:integrations` scope.
 
 ```bash
 olira integrations catalog                    # available providers, org-independent
@@ -573,8 +573,8 @@ Each scope grants access to one set of Olira endpoints.
 | `api:org-config`        | Read and update organisation platform configuration via REST                       |
 | `sdk:state-read`        | Read patient state — stable data, event modules, summaries, logs, events, memories |
 | `sdk:historical-ingest` | Upload and manage bulk historical data ingestion jobs                              |
-| `sdk:integrations`      | Manage EHR integrations — catalog, connect/disconnect, data-point subscriptions, sync status (control-plane only, no write-back) |
-| `sdk:integration-write` | Honor the `write_back` flag on logged events for EHR write-back                   |
+| `sdk:integrations`      | Manage connected integrations — catalog, connect/disconnect, data-point subscriptions, sync status (control-plane only, no write-back) |
+| `sdk:integration-write` | Honor the `write_back` flag on logged events for write-back to a connected system                   |
 | `api:manage-projects`   | Create, list, rename, and deprecate projects; requires an org-wide key            |
 | `sdk:actions`           | Manage outbound-action destinations and their signing secrets; read/redeliver delivery history |
 

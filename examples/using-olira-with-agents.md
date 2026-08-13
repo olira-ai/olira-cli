@@ -61,7 +61,7 @@ Some things to try:
 - *"Upload `data.jsonl` as a historical ingestion job and confirm it once
   it's ready for review."*
 - *"What symptoms has patient `<id>` reported recently?"*
-- *"List our connected EHR integrations and tell me if any are failing to
+- *"List our connected integrations and tell me if any are failing to
   sync."*
 - *"Create an API key called `ci-pipeline` with the event-log scope."* —
   this one should make your agent stop and tell you it needs your help,

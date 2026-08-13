@@ -115,7 +115,7 @@ with an API key via `OLIRA_API_KEY`, not by logging in.
 | `olira state stable\|modules\|views\|logs\|events\|memories <patient_id>` | Query a patient's clinical state (read-only). |
 | `olira cohorts list` / `get <id>` / `templates <id>` | Query cohorts (read-only). |
 | `olira projects list` / `get <id_or_slug>` | Query projects (read-only; org-wide key). |
-| `olira integrations catalog\|list\|get\|data-points` | Query EHR integrations (read-only). |
+| `olira integrations catalog\|list\|get\|data-points` | Query connected integrations (read-only). |
 | `olira actions create-destination\|list-destinations\|get-destination\|update-destination\|delete-destination\|rotate-destination-secret` | Manage outbound-action webhook/email destinations. |
 | `olira actions list-deliveries\|get-delivery\|redeliver-delivery` | Inspect and redeliver from the delivery ledger. |
 | `olira log-types list` / `get <subtype>` | Query the platform's log-type catalog, including full payload schemas (read-only). |
@@ -183,8 +183,8 @@ When creating an API key you will be prompted to select one or more scopes:
 | `api:org-config` | Read and update organisation platform configuration via REST |
 | `sdk:state-read` | Read patient state — stable data, event modules, summaries, logs, events, memories |
 | `sdk:historical-ingest` | Upload and manage bulk historical data ingestion jobs via the Olira SDK |
-| `sdk:integrations` | Manage EHR integrations — catalog, connect/disconnect, data-point subscriptions, sync status (control-plane only, no write-back) |
-| `sdk:integration-write` | Honor the `write_back` flag on logged events for EHR write-back |
+| `sdk:integrations` | Manage connected integrations — catalog, connect/disconnect, data-point subscriptions, sync status (control-plane only, no write-back) |
+| `sdk:integration-write` | Honor the `write_back` flag on logged events for write-back to a connected system |
 | `api:manage-projects` | Create, list, rename, and deprecate projects; requires an org-wide key |
 | `sdk:actions` | Manage outbound-action destinations and their signing secrets; read/redeliver delivery history |
 
@@ -211,7 +211,7 @@ reference](https://docs.olira.ai/cli) for details.
 ## Examples
 
 The [`examples/`](examples/) folder has runnable end-to-end scripts
-(ingest a file, query a patient's clinical state, check EHR integration
+(ingest a file, query a patient's clinical state, check integration
 health) and [`examples/using-olira-with-agents.md`](examples/using-olira-with-agents.md) —
 a guide to setting up a coding agent (Cursor, Claude Code, Codex, or any
 other) to drive this CLI on your behalf.

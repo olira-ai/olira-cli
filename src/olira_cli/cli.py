@@ -443,11 +443,11 @@ def _build_projects_parser(subparsers: Any, common: argparse.ArgumentParser) -> 
 
 def _build_integrations_parser(subparsers: Any, common: argparse.ArgumentParser) -> None:
     integrations_parser = subparsers.add_parser(
-        "integrations", help="Query EHR integrations (read-only)", parents=[common]
+        "integrations", help="Query connected integrations (read-only)", parents=[common]
     )
     integrations_sub = integrations_parser.add_subparsers(dest="integrations_command", help="integrations subcommands")
 
-    integrations_sub.add_parser("catalog", help="List available EHR providers", parents=[common])
+    integrations_sub.add_parser("catalog", help="List available integration providers", parents=[common])
     integrations_sub.add_parser("list", help="List the org's connected integrations", parents=[common])
 
     integrations_get = integrations_sub.add_parser("get", help="Get a single integration", parents=[common])
