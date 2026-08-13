@@ -44,6 +44,7 @@ event that causes a delivery to it. Currently available triggers:
 | `org.mapping.failed` | One of your incoming logs could not be translated into Olira's data model |
 | `ingestion.completed` | A historical ingestion job you started finished successfully |
 | `ingestion.failed` | A historical ingestion job you started did not finish successfully |
+| `integration.sync.failed` | One of your connected EHR integration's data points failed to sync |
 
 `--triggers` is required. Pass `"*"` to subscribe to every currently available
 trigger. Because `"*"` is evaluated by the platform rather than by this list, a

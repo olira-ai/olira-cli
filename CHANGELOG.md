@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.3.0] - 2026-08-13
+## [1.3.1] - 2026-08-13
 
 ### Added
 
@@ -21,6 +21,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   server, not the CLI).
 - `sdk:actions` scope documented in the `olira-setup` skill's scope table
   and in `CLI_DOCUMENTATION.md`/`README.md`.
+
+## [1.3.0] - 2026-08-10
+
+### Added
+- `olira log-types list` / `olira log-types get <subtype>` — discover the platform's log-type
+  catalog and each type's full payload JSON Schema. Requires `sdk:event-log` scope.
+- `olira-logging` — a fourth `olira init agent` skill teaching a coding agent
+  to instrument a codebase with live SDK logging: discover the right log
+  type from the catalog (by description, not name), shape the payload to its
+  JSON Schema, call `client.log()` (including the flush-before-exit rule and
+  per-item batch failures), and verify the round-trip with
+  `olira state logs`.
 
 ## [1.2.0] - 2026-08-10
 

@@ -159,7 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     init_agent = init_sub.add_parser(
         "agent",
-        help="Write AGENTS.md plus per-workflow skills (olira-ingest, olira-query, olira-setup, olira-actions)",
+        help="Write AGENTS.md plus per-workflow skills (olira-ingest, olira-logging, olira-query, olira-setup, olira-actions)",
         parents=[common],
     )
     init_agent.add_argument("--claude", action="store_true", help="Write the skills under .claude/skills/")
@@ -331,6 +331,7 @@ def build_parser() -> argparse.ArgumentParser:
     _build_cohorts_parser(subparsers, common)
     _build_projects_parser(subparsers, common)
     _build_integrations_parser(subparsers, common)
+    _build_log_types_parser(subparsers, common)
     _build_actions_parser(subparsers, common)
 
     return parser
@@ -461,6 +462,18 @@ def _build_integrations_parser(subparsers: Any, common: argparse.ArgumentParser)
     )
 
 
+def _build_log_types_parser(subparsers: Any, common: argparse.ArgumentParser) -> None:
+    log_types_parser = subparsers.add_parser(
+        "log-types", help="Discover supported log types and their payload schemas (read-only)", parents=[common]
+    )
+    log_types_sub = log_types_parser.add_subparsers(dest="log_types_command", help="log-types subcommands")
+
+    log_types_sub.add_parser("list", help="List the platform's log-type catalog", parents=[common])
+
+    log_types_get = log_types_sub.add_parser("get", help="Get one log type's full payload schema", parents=[common])
+    log_types_get.add_argument("subtype", help="Log type subtype (or a known alias)")
+
+
 def _add_digest_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--digest-time-of-day", default=None, metavar="HH:MM", help="Batch time, on a half-hour boundary")
     p.add_argument("--digest-timezone", default=None, metavar="TZ", help="IANA timezone, e.g. America/New_York")
@@ -574,6 +587,7 @@ def _command_name(args: argparse.Namespace) -> str:
         or getattr(args, "cohorts_command", None)
         or getattr(args, "projects_command", None)
         or getattr(args, "integrations_command", None)
+        or getattr(args, "log_types_command", None)
         or getattr(args, "actions_command", None)
     )
     return f"{command}.{sub}" if sub else command
@@ -616,6 +630,8 @@ def _dispatch(args: argparse.Namespace) -> CommandResult:
         return _cmd_projects(args)
     if args.command == "integrations":
         return _cmd_integrations(args)
+    if args.command == "log-types":
+        return _cmd_log_types(args)
     if args.command == "actions":
         return _cmd_actions(args)
     raise CliError("Unknown command.", code="USAGE", exit_code=2)
@@ -760,6 +776,19 @@ def _cmd_integrations(args: argparse.Namespace) -> CommandResult:
     sub = getattr(args, "integrations_command", None)
     if sub not in dispatch:
         raise CliError("Usage: olira integrations {catalog|list|get|data-points}", code="USAGE", exit_code=2)
+    return dispatch[sub](args)
+
+
+def _cmd_log_types(args: argparse.Namespace) -> CommandResult:
+    from olira_cli.reads import cmd_log_types_get, cmd_log_types_list
+
+    dispatch = {
+        "list": cmd_log_types_list,
+        "get": cmd_log_types_get,
+    }
+    sub = getattr(args, "log_types_command", None)
+    if sub not in dispatch:
+        raise CliError("Usage: olira log-types {list|get}", code="USAGE", exit_code=2)
     return dispatch[sub](args)
 
 

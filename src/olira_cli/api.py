@@ -15,7 +15,10 @@ from olira_cli.errors import CliError, CommandResult, require_tty
 
 VALID_SCOPES: dict[str, str] = {
     "mcp:patient-state": "Query patient state via the MCP Patient State server",
-    "sdk:event-log": "Log health events and upload passive signal Parquet (send_signals) via the Olira SDK",
+    "sdk:event-log": (
+        "Log health events and upload passive signal Parquet (send_signals) via the Olira SDK; "
+        "also gates olira log-types discovery"
+    ),
     "sdk:patient-token": "Mint short-lived, patient-locked JWTs for SDK use",
     "api:manage-patients": "Create, read, update, and deactivate patient records via REST",
     "api:org-config": "Read and update organisation platform configuration via REST",
