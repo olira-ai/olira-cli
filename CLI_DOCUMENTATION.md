@@ -76,7 +76,7 @@ Every command works headlessly — no command will hang waiting on a prompt.
 This is also what powers `olira init agent` (below).
 
 - Pass **`--json`** (root or subcommand position, e.g. `olira --json ingest list` or `olira ingest list --json`) for a single JSON envelope on stdout: `{"ok": true|false, "command": "...", "cli_version": "...", "data": {...} | "error": {...}, "warnings": [...]}`. `--watch` additionally streams NDJSON `progress`/`heartbeat` events before the final envelope line.
-- Auth for scripts/CI/agents: set **`OLIRA_API_KEY=olira_...`** (or pass `--api-key`) instead of `olira login`. See [Environment variables](#environment-variables) and [Credential types](#credential-types) below — `ingest`/`validate --check-org`/`patients`/`state`/`cohorts`/`projects`/`integrations` need an API key; `keys`/`configure cursor` need a browser login and cannot use one.
+- Auth for scripts/CI/agents: set **`OLIRA_API_KEY=olira_...`** (or pass `--api-key`) instead of `olira login`. See [Environment variables](#environment-variables) and [Credential types](#credential-types) below — `ingest`/`validate --check-org`/`patients`/`state`/`cohorts`/`projects`/`integrations`/`actions` need an API key; `keys`/`configure cursor` need a browser login and cannot use one.
 - Every place that would otherwise prompt has a flag that answers it up front: `--yes` (`keys revoke`, `ingest cancel`), `--name`/`--scopes` (`keys create`), `--dir` (`configure cursor`), `--init-templates`/`--no-backfill` (`ingest confirm`). Without the flag and without a TTY, the command fails fast (exit `6`, `PROMPT_REQUIRED`) naming the flag to add — it never hangs.
 - Pass **`--timeout SECONDS`** with `--watch` on long-running ingest commands; without it, watching a job that never reaches a terminal state polls forever.
 - **Querying** (`patients`, `state`, `cohorts`, `projects`, `integrations`) is entirely read-only — same API key as ingestion, no writes, no prompts. See each command's section below.
@@ -98,7 +98,7 @@ Two credential types exist and are **not** interchangeable:
 
 | Command group                              | Needs                                   | Will NOT accept                     |
 | ------------------------------------------- | ---------------------------------------- | ------------------------------------ |
-| `olira ingest *`, `olira validate --check-org`, `olira patients *`, `olira state *`, `olira cohorts *`, `olira projects *`, `olira integrations *` | An API key (`OLIRA_API_KEY` / `--api-key`) | A browser-login session               |
+| `olira ingest *`, `olira validate --check-org`, `olira patients *`, `olira state *`, `olira cohorts *`, `olira projects *`, `olira integrations *`, `olira actions *` | An API key (`OLIRA_API_KEY` / `--api-key`) | A browser-login session               |
 | `olira keys *`, `olira configure cursor`    | A browser login (`olira login`)          | An API key                            |
 
 Using the wrong one fails fast with a specific error (exit `3`) rather than
@@ -107,11 +107,11 @@ an opaque 401 from the server.
 ### JSON envelope
 
 ```json
-{"ok": true, "command": "ingest.status", "cli_version": "1.2.0", "data": {"job_id": "...", "status": "replaying", "...": "..."}, "warnings": []}
+{"ok": true, "command": "ingest.status", "cli_version": "1.3.0", "data": {"job_id": "...", "status": "replaying", "...": "..."}, "warnings": []}
 ```
 
 ```json
-{"ok": false, "command": "keys.revoke", "cli_version": "1.2.0",
+{"ok": false, "command": "keys.revoke", "cli_version": "1.3.0",
  "error": {"code": "PROMPT_REQUIRED", "message": "Revoking a key requires an interactive terminal.",
            "remediation": "Re-run with --yes.", "http_status": null, "details": {}}}
 ```

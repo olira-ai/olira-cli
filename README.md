@@ -131,8 +131,9 @@ commands for them:
 
 **Teach your agent to drive this CLI**
 (validate/upload historical data, manage keys, read job status, register
-webhook/email destinations, verify delivery signatures) — run once, in the
-repo the agent works in:
+webhook/email destinations) — plus how to verify delivery signatures in its
+own receiving server, which is SDK guidance, not a CLI operation — run once,
+in the repo the agent works in:
 
 ```bash
 olira init agent

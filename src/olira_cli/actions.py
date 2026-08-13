@@ -199,6 +199,9 @@ def cmd_update_destination(args: Any) -> CommandResult:
     auth = resolve_auth("sdk", getattr(args, "api_key", None))
     project = resolve_project(args)
 
+    if getattr(args, "url", None) is not None and getattr(args, "to_email", None) is not None:
+        raise CliError("Pass either --url or --to-email, not both.", code="USAGE", exit_code=2)
+
     body: dict[str, Any] = {}
     if getattr(args, "url", None) is not None:
         body["url"] = args.url

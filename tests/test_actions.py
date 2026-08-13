@@ -187,6 +187,24 @@ def test_update_destination_only_sends_given_fields(run_cli, no_creds, monkeypat
     assert seen[0].method == "PATCH"
 
 
+def test_update_destination_url_and_to_email_are_mutually_exclusive(run_cli, no_creds, monkeypatch):
+    monkeypatch.setenv("OLIRA_API_KEY", "olira_dev_key")
+    code, out, _ = run_cli(
+        [
+            "--json",
+            "actions",
+            "update-destination",
+            "dest-1",
+            "--url",
+            "https://x.example.com",
+            "--to-email",
+            "a@b.com",
+        ]
+    )
+    assert code == 2
+    assert json_envelope(out)["error"]["code"] == "USAGE"
+
+
 def test_update_destination_clear_digest_schedule_sends_explicit_null(run_cli, no_creds, monkeypatch):
     monkeypatch.setenv("OLIRA_API_KEY", "olira_dev_key")
     handler, seen = _capturing(200, {"id": "dest-1"})
