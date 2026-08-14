@@ -20,7 +20,7 @@ yourself once, then create a long-lived API key for the agent to use:
 
 ```bash
 olira login
-olira keys create --name "my-agent" --scopes sdk:historical-ingest sdk:event-log api:manage-patients sdk:state-read sdk:integrations
+olira keys create --name "my-agent" --scopes sdk:historical-ingest sdk:event-log api:manage-patients sdk:state-read sdk:integrations sdk:actions
 ```
 
 Grant only the scopes your agent actually needs — see
@@ -36,15 +36,16 @@ export OLIRA_API_KEY=olira_...
 olira init agent
 ```
 
-This writes `AGENTS.md` plus four focused skills — `olira-ingest`,
-`olira-logging`, `olira-query`, `olira-setup` — as
+This writes `AGENTS.md` plus five focused skills — `olira-ingest`,
+`olira-logging`, `olira-query`, `olira-setup`, `olira-actions` — as
 `.claude/skills/<name>/SKILL.md` for Claude Code and
 `.agents/skills/<name>/SKILL.md` for Cursor and Codex, the shared
 location both of those discover skills from. `AGENTS.md` covers the auth
 model, the `--json` envelope, and the full exit-code table; each skill
 covers only its own workflow (the ingestion state machine, instrumenting
-your code to log via the SDK, the read-only query commands, or key
-management) so a task only loads what it needs.
+your code to log via the SDK, the read-only query commands, key
+management, or outbound-action destinations and deliveries) so a task
+only loads what it needs.
 Most agents (Claude Code, Cursor, Codex) pick these up automatically; if
 yours doesn't, point it at `AGENTS.md` directly.
 
@@ -60,12 +61,16 @@ Some things to try:
 - *"Upload `data.jsonl` as a historical ingestion job and confirm it once
   it's ready for review."*
 - *"What symptoms has patient `<id>` reported recently?"*
-- *"List our connected EHR integrations and tell me if any are failing to
+- *"List our connected integrations and tell me if any are failing to
   sync."*
 - *"Create an API key called `ci-pipeline` with the event-log scope."* —
   this one should make your agent stop and tell you it needs your help,
   since key management requires a browser login it can't do itself. That's
   the CLI working as intended, not a bug.
+- *"Register a webhook destination for `patient.state.changed`."* — should
+  run `olira actions create-destination --url ... --triggers patient.state.changed`
+  (scope `sdk:actions`). Verifying the webhook signature is still SDK-only;
+  it runs in the receiving server, not the CLI.
 
 ## What correct agent behavior looks like
 

@@ -105,7 +105,7 @@ with an API key via `OLIRA_API_KEY`, not by logging in.
 | `olira configure cursor` | Write the MCP server entry into `mcp.json` with your current login token. Prefers `.cursor/` in the current directory. |
 | `olira configure claude` | Write a project-scoped MCP server entry into `.mcp.json` for Claude Code. No login needed — references an env var, never a literal token. |
 | `olira configure codex` | Same, for Codex CLI (`.codex/config.toml`). |
-| `olira init agent` | Write agent-facing docs into the current repo: `AGENTS.md` plus four focused skills (ingest, logging, query, setup) for Claude Code and/or Cursor/Codex. |
+| `olira init agent` | Write agent-facing docs into the current repo: `AGENTS.md` plus five focused skills (ingest, logging, query, setup, actions) for Claude Code and/or Cursor/Codex. |
 | `olira keys create` | Create an API key (interactive wizard). Use `--name` and `--scopes` to skip prompts. |
 | `olira keys list` | List API keys for your organization, including their scopes. |
 | `olira keys revoke <name-or-id>` | Permanently revoke an API key. Use `--yes` to skip the confirmation prompt. |
@@ -115,7 +115,9 @@ with an API key via `OLIRA_API_KEY`, not by logging in.
 | `olira state stable\|modules\|views\|logs\|events\|memories <patient_id>` | Query a patient's clinical state (read-only). |
 | `olira cohorts list` / `get <id>` / `templates <id>` | Query cohorts (read-only). |
 | `olira projects list` / `get <id_or_slug>` | Query projects (read-only; org-wide key). |
-| `olira integrations catalog\|list\|get\|data-points` | Query EHR integrations (read-only). |
+| `olira integrations catalog\|list\|get\|data-points` | Query connected integrations (read-only). |
+| `olira actions create-destination\|list-destinations\|get-destination\|update-destination\|delete-destination\|rotate-destination-secret` | Manage outbound-action webhook/email destinations. |
+| `olira actions list-deliveries\|get-delivery\|redeliver-delivery` | Inspect and redeliver from the delivery ledger. |
 | `olira log-types list` / `get <subtype>` | Query the platform's log-type catalog, including full payload schemas (read-only). |
 
 Every command accepts `--json` for machine-readable output — see
@@ -128,16 +130,20 @@ exit-code contract.
 There are two independent things you might want an agent to do, and two
 commands for them:
 
-**Teach your agent to drive this CLI** (validate/upload historical data,
-manage keys, read job status) — run once, in the repo the agent works in:
+**Teach your agent to drive this CLI**
+(validate/upload historical data, manage keys, read job status, register
+webhook/email destinations) — plus how to verify delivery signatures in its
+own receiving server, which is SDK guidance, not a CLI operation — run once,
+in the repo the agent works in:
 
 ```bash
 olira init agent
 ```
 
-This writes `AGENTS.md` plus **four focused skills** — `olira-ingest`
+This writes `AGENTS.md` plus **five focused skills** — `olira-ingest`
 (bulk historical files), `olira-logging` (instrumenting your code to log
-live events via the SDK), `olira-query`, `olira-setup` — as
+live events via the SDK), `olira-query`, `olira-setup`, `olira-actions`
+(outbound-action destinations and deliveries) — as
 `.claude/skills/<name>/SKILL.md` for Claude Code and
 `.agents/skills/<name>/SKILL.md` for Cursor and Codex, which both discover
 skills from that shared, vendor-neutral location (`--cursor` and `--codex`
@@ -177,9 +183,10 @@ When creating an API key you will be prompted to select one or more scopes:
 | `api:org-config` | Read and update organisation platform configuration via REST |
 | `sdk:state-read` | Read patient state — stable data, event modules, summaries, logs, events, memories |
 | `sdk:historical-ingest` | Upload and manage bulk historical data ingestion jobs via the Olira SDK |
-| `sdk:integrations` | Manage EHR integrations — catalog, connect/disconnect, data-point subscriptions, sync status (control-plane only, no write-back) |
-| `sdk:integration-write` | Honor the `write_back` flag on logged events for EHR write-back |
+| `sdk:integrations` | Manage connected integrations — catalog, connect/disconnect, data-point subscriptions, sync status (control-plane only, no write-back) |
+| `sdk:integration-write` | Honor the `write_back` flag on logged events for write-back to a connected system |
 | `api:manage-projects` | Create, list, rename, and deprecate projects; requires an org-wide key |
+| `sdk:actions` | Manage outbound-action destinations and their signing secrets; read/redeliver delivery history |
 
 This list matches [docs.olira.ai/cli/scopes](https://docs.olira.ai/cli/scopes) — treat that page as canonical if the two ever disagree.
 
@@ -192,8 +199,9 @@ Tokens expire after ~24 hours. Re-run `olira login` to refresh; if you still hav
 API keys never expire and are not stored locally — they live in the platform and can be revoked with `olira keys revoke`.
 
 Two credential types exist and are not interchangeable: `olira ingest *`,
-`olira validate --check-org`, and the read-only query commands (`patients`,
-`state`, `cohorts`, `projects`, `integrations`, `log-types`) all need an API key
+`olira validate --check-org`, the read-only query commands (`patients`,
+`state`, `cohorts`, `projects`, `integrations`, `log-types`), and
+`olira actions *` all need an API key
 (`OLIRA_API_KEY` or `--api-key`); `olira keys *` and `olira configure cursor`
 need a browser login instead. `olira configure claude`/`olira configure
 codex` need neither — they write a config that references an env var
@@ -203,7 +211,7 @@ reference](https://docs.olira.ai/cli) for details.
 ## Examples
 
 The [`examples/`](examples/) folder has runnable end-to-end scripts
-(ingest a file, query a patient's clinical state, check EHR integration
+(ingest a file, query a patient's clinical state, check integration
 health) and [`examples/using-olira-with-agents.md`](examples/using-olira-with-agents.md) —
 a guide to setting up a coding agent (Cursor, Claude Code, Codex, or any
 other) to drive this CLI on your behalf.

@@ -25,8 +25,9 @@ VALID_SCOPES: dict[str, str] = {
     "sdk:state-read": "Read patient state — stable data, event modules, summaries, logs, events, memories",
     "sdk:historical-ingest": "Upload and manage bulk historical data ingestion jobs via the Olira SDK",
     "sdk:integrations": "Manage integrations — catalog, connect/disconnect, data-point subscriptions, sync status",
-    "sdk:integration-write": "Honor the write_back flag on logged events for EHR write-back",
+    "sdk:integration-write": "Honor the write_back flag on logged events for write-back to a connected system",
     "api:manage-projects": "Create, list, rename, and deprecate projects; requires an org-wide key",
+    "sdk:actions": "Manage outbound-action destinations and their signing secrets; read/redeliver delivery history",
 }
 _DEFAULT_SCOPE = "mcp:patient-state"
 

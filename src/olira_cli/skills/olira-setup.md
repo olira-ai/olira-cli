@@ -28,8 +28,9 @@ Grant only what a key needs — least privilege, one scope per capability:
 | `sdk:event-log` | Log events and upload passive signal Parquet (`send_signals`); also gates `olira log-types` discovery |
 | `sdk:state-read` | Read patient state, summaries, event logs (`olira state *`) |
 | `sdk:patient-token` | Mint short-lived patient-scoped JWTs |
-| `sdk:integrations` | Manage/query EHR integrations — catalog, connect/disconnect, sync status (control-plane only) |
-| `sdk:integration-write` | Honor `write_back` on logged events for EHR write-back |
+| `sdk:integrations` | Manage/query connected integrations — catalog, connect/disconnect, sync status (control-plane only) |
+| `sdk:integration-write` | Honor `write_back` on logged events for write-back to a connected system |
+| `sdk:actions` | Manage outbound-action destinations and their signing secrets; read/redeliver delivery history (see `olira-actions`) |
 | `api:manage-projects` | Manage/query projects (org-wide keys only) |
 | `mcp:patient-state` | Query patient state via the MCP server (used by `configure claude`/`configure codex`, not by the CLI's own commands) |
 
@@ -45,7 +46,7 @@ olira keys revoke <name-or-id> --yes
 
 Two independent things, don't confuse them:
 
-- **`olira init agent`** writes the skills you're reading now (`olira-ingest`/`olira-logging`/`olira-query`/`olira-setup`) plus `AGENTS.md` — teaches an agent to drive the CLI's commands.
+- **`olira init agent`** writes the skills you're reading now (`olira-ingest`/`olira-logging`/`olira-query`/`olira-setup`/`olira-actions`) plus `AGENTS.md` — teaches an agent to drive the CLI's commands (including `olira actions *`) and to verify webhook signatures in the receiving server (SDK-only).
 - **`olira configure cursor` / `configure claude` / `configure codex`** connect that client's *own* MCP tool access to Olira's MCP server, for querying patient state as a tool instead of shelling out to the CLI.
   - `configure cursor` needs a browser login and embeds the current token into `.cursor/mcp.json`.
   - `configure claude` / `configure codex` need no auth to run and never write a secret to disk. The config references an env var (`OLIRA_API_KEY` by default; override with `--api-key-env`) that must be exported wherever that client actually runs, holding a key with `mcp:patient-state` scope.

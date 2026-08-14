@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-08-13
+
+### Added
+
+- `olira actions` command group: `create-destination`, `list-destinations`,
+  `get-destination`, `update-destination`, `delete-destination`,
+  `rotate-destination-secret`, `list-deliveries`, `get-delivery`,
+  `redeliver-delivery` — manage outbound-action webhook/email
+  destinations and inspect/redeliver from the delivery ledger, without
+  writing SDK code.
+- `olira-actions` skill for `olira init agent` — the `olira actions *`
+  commands above, plus digest batching and delivery-signature verification
+  (the one piece that stays SDK-only, since it runs in your receiving
+  server, not the CLI). Trigger table includes `integration.sync.failed`.
+- `sdk:actions` scope documented in the `olira-setup` skill's scope table
+  and in `CLI_DOCUMENTATION.md`/`README.md`.
+
 ## [1.3.0] - 2026-08-10
 
 ### Added

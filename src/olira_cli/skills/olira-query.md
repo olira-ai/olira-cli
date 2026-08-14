@@ -1,6 +1,6 @@
 ---
 name: olira-query
-description: Query patients, clinical state, cohorts, projects, EHR integrations, and the log-type catalog read-only with the Olira CLI — same API key as ingestion, no writes, no prompts.
+description: Query patients, clinical state, cohorts, projects, connected integrations, and the log-type catalog read-only with the Olira CLI — same API key as ingestion, no writes, no prompts.
 ---
 
 # Olira CLI — Querying
@@ -49,7 +49,7 @@ olira patients list --external-system epic --external-value MRN-12345 --json
 olira state logs <patient_id> --event-types symptom_report --limit 20 --json
 olira state stable <patient_id> --json
 
-# Check an EHR integration's sync health
+# Check a connected integration's sync health
 olira integrations list --json
 olira integrations data-points <integration_id> --json
 

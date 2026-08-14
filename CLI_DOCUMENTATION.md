@@ -1,6 +1,6 @@
 > **Maintained by:** Olira Engineering  
 > **Published at:** [docs.olira.ai](https://docs.olira.ai) → CLI tab  
-> **Version:** `1.3.0`
+> **Version:** `1.3.1`
 
 # Olira CLI
 
@@ -76,18 +76,18 @@ Every command works headlessly — no command will hang waiting on a prompt.
 This is also what powers `olira init agent` (below).
 
 - Pass **`--json`** (root or subcommand position, e.g. `olira --json ingest list` or `olira ingest list --json`) for a single JSON envelope on stdout: `{"ok": true|false, "command": "...", "cli_version": "...", "data": {...} | "error": {...}, "warnings": [...]}`. `--watch` additionally streams NDJSON `progress`/`heartbeat` events before the final envelope line.
-- Auth for scripts/CI/agents: set **`OLIRA_API_KEY=olira_...`** (or pass `--api-key`) instead of `olira login`. See [Environment variables](#environment-variables) and [Credential types](#credential-types) below — `ingest`/`validate --check-org`/`patients`/`state`/`cohorts`/`projects`/`integrations` need an API key; `keys`/`configure cursor` need a browser login and cannot use one.
+- Auth for scripts/CI/agents: set **`OLIRA_API_KEY=olira_...`** (or pass `--api-key`) instead of `olira login`. See [Environment variables](#environment-variables) and [Credential types](#credential-types) below — `ingest`/`validate --check-org`/`patients`/`state`/`cohorts`/`projects`/`integrations`/`actions` need an API key; `keys`/`configure cursor` need a browser login and cannot use one.
 - Every place that would otherwise prompt has a flag that answers it up front: `--yes` (`keys revoke`, `ingest cancel`), `--name`/`--scopes` (`keys create`), `--dir` (`configure cursor`), `--init-templates`/`--no-backfill` (`ingest confirm`). Without the flag and without a TTY, the command fails fast (exit `6`, `PROMPT_REQUIRED`) naming the flag to add — it never hangs.
 - Pass **`--timeout SECONDS`** with `--watch` on long-running ingest commands; without it, watching a job that never reaches a terminal state polls forever.
 - **Querying** (`patients`, `state`, `cohorts`, `projects`, `integrations`) is entirely read-only — same API key as ingestion, no writes, no prompts. See each command's section below.
-- **`olira init agent`** writes `AGENTS.md` plus four focused skills (`olira-ingest`/`olira-logging`/`olira-query`/`olira-setup`) into the current repo — as Claude Code skills and/or the shared `.agents/skills/` format Cursor and Codex both discover from — covering all of the above plus the ingestion state machine, JSONL schema, SDK logging workflow, query commands, and per-workflow failure playbooks. Point a coding agent at a repo with these files and it can drive the CLI correctly without additional instructions. See [`olira init agent`](#olira-init-agent) below for why it's split this way.
+- **`olira init agent`** writes `AGENTS.md` plus five focused skills (`olira-ingest`/`olira-logging`/`olira-query`/`olira-setup`/`olira-actions`) into the current repo — as Claude Code skills and/or the shared `.agents/skills/` format Cursor and Codex both discover from — covering all of the above plus the ingestion state machine, JSONL schema, SDK logging workflow, query commands, outbound-action destinations/deliveries, and per-workflow failure playbooks. Point a coding agent at a repo with these files and it can drive the CLI correctly without additional instructions. See [`olira init agent`](#olira-init-agent) below for why it's split this way.
 - See [`examples/`](https://github.com/olira-ai/olira-cli/tree/main/examples) in the CLI repo for runnable end-to-end scripts (ingest, query a patient, check integration health) and a full guide on driving this CLI with a coding agent.
 
 ### Environment variables
 
 | Variable          | Used by                              | Purpose                                                                 |
 | ------------------ | ------------------------------------- | ------------------------------------------------------------------------ |
-| `OLIRA_API_KEY`    | `ingest *`, `validate --check-org`, `patients *`, `state *`, `cohorts *`, `projects *`, `integrations *` | API key, in place of `--api-key` or an interactive login |
+| `OLIRA_API_KEY`    | `ingest *`, `validate --check-org`, `patients *`, `state *`, `cohorts *`, `projects *`, `integrations *`, `actions *` | API key, in place of `--api-key` or an interactive login |
 | `OLIRA_API_URL`    | any command resolving credentials     | Override the app-api base URL (rarely needed; normally derived)         |
 | `OLIRA_PROJECT`    | `ingest *`, `validate --check-org`, `patients *`, `cohorts *` | Default `--project` when targeting a non-default project (org-wide keys)|
 | `NO_COLOR`         | `validate`                            | Disable ANSI colors in human-mode output                                |
@@ -98,7 +98,7 @@ Two credential types exist and are **not** interchangeable:
 
 | Command group                              | Needs                                   | Will NOT accept                     |
 | ------------------------------------------- | ---------------------------------------- | ------------------------------------ |
-| `olira ingest *`, `olira validate --check-org`, `olira patients *`, `olira state *`, `olira cohorts *`, `olira projects *`, `olira integrations *` | An API key (`OLIRA_API_KEY` / `--api-key`) | A browser-login session               |
+| `olira ingest *`, `olira validate --check-org`, `olira patients *`, `olira state *`, `olira cohorts *`, `olira projects *`, `olira integrations *`, `olira actions *` | An API key (`OLIRA_API_KEY` / `--api-key`) | A browser-login session               |
 | `olira keys *`, `olira configure cursor`    | A browser login (`olira login`)          | An API key                            |
 
 Using the wrong one fails fast with a specific error (exit `3`) rather than
@@ -107,11 +107,11 @@ an opaque 401 from the server.
 ### JSON envelope
 
 ```json
-{"ok": true, "command": "ingest.status", "cli_version": "1.3.0", "data": {"job": {"job_id": "...", "status": "replaying", "...": "..."}}, "warnings": []}
+{"ok": true, "command": "ingest.status", "cli_version": "1.3.1", "data": {"job": {"job_id": "...", "status": "replaying", "...": "..."}}, "warnings": []}
 ```
 
 ```json
-{"ok": false, "command": "keys.revoke", "cli_version": "1.3.0",
+{"ok": false, "command": "keys.revoke", "cli_version": "1.3.1",
  "error": {"code": "PROMPT_REQUIRED", "message": "Revoking a key requires an interactive terminal.",
            "remediation": "Re-run with --yes.", "http_status": null, "details": {}}}
 ```
@@ -151,7 +151,7 @@ Create a new API key
 | Flag       | Description                                                                                                                                                                                                                               |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--name`   | Key name (skips the interactive prompt).                                                                                                                                                                                                  |
-| `--scopes` | Scopes to grant (space-separated). Skips the interactive picker. Valid: `mcp:patient-state`, `sdk:event-log`, `sdk:patient-token`, `api:manage-patients`, `api:org-config`, `sdk:state-read`, `sdk:historical-ingest`, `sdk:integrations`, `sdk:integration-write`, `api:manage-projects`. |
+| `--scopes` | Scopes to grant (space-separated). Skips the interactive picker. Valid: `mcp:patient-state`, `sdk:event-log`, `sdk:patient-token`, `api:manage-patients`, `api:org-config`, `sdk:state-read`, `sdk:historical-ingest`, `sdk:integrations`, `sdk:integration-write`, `api:manage-projects`, `sdk:actions`. |
 
 ### `olira keys list`
 
@@ -202,7 +202,7 @@ same arguments reports `unchanged`.
 
 ### `olira init agent`
 
-Write agent-facing docs into the current repo: `AGENTS.md` plus **four
+Write agent-facing docs into the current repo: `AGENTS.md` plus **five
 focused skills** — split by workflow rather than one monolith, since the
 ingestion state machine is genuinely complex and a "list patients" task
 shouldn't have to load it:
@@ -213,6 +213,7 @@ shouldn't have to load it:
 | `olira-logging` | Instrumenting a codebase to log live events via the SDK — log-type discovery, payload shaping to the catalog schemas, `client.log()`/`flush()` semantics, round-trip verification | `<slug>/SKILL.md` |
 | `olira-query` | `patients`/`state`/`cohorts`/`projects`/`integrations`/`log-types` command reference and recipes | `<slug>/SKILL.md` |
 | `olira-setup` | Auth model, scopes, key management, MCP client configuration | `<slug>/SKILL.md` |
+| `olira-actions` | Outbound-action destinations, triggers, digest batching, and deliveries (`olira actions *`); signature verification is SDK-only (runs in your receiver, not the CLI) | `<slug>/SKILL.md` |
 
 `--claude` writes to `.claude/skills/<slug>/SKILL.md`. `--cursor` and `--codex`
 both write the identical files to `.agents/skills/<slug>/SKILL.md` — the
@@ -514,7 +515,7 @@ olira projects get <id_or_slug>
 
 ### `olira integrations`
 
-Read-only EHR integration queries. Requires an API key with `sdk:integrations` scope.
+Read-only integration queries. Requires an API key with `sdk:integrations` scope.
 
 ```bash
 olira integrations catalog                    # available providers, org-independent
@@ -523,6 +524,31 @@ olira integrations get <integration_id>
 olira integrations data-points <integration_id>            # subscribed data points + sync status
 olira integrations data-points <integration_id> --catalog  # data points available to subscribe
 ```
+
+### `olira actions`
+
+Outbound-action destinations (webhook/email) and the delivery ledger. Requires an API key with `sdk:actions` scope. See the [`olira-actions`](#olira-init-agent) skill for the full trigger vocabulary, digest batching, and HMAC signature verification (the one piece with no CLI command, since it runs in *your* receiving server).
+
+```bash
+# Destinations
+olira actions create-destination --url <url> --triggers <t1,t2,...> [--description ...] \
+  [--header KEY=VALUE ...] [--rate-limit N] \
+  [--digest-time-of-day HH:MM --digest-timezone TZ --digest-triggers <t1,...>]
+olira actions create-destination --to-email <email> [--subject ...] [--from-name ...] --triggers <t1,...>
+olira actions list-destinations
+olira actions get-destination <destination_id>
+olira actions update-destination <destination_id> [--url ...] [--to-email ...] [--triggers ...] \
+  [--status active|disabled] [--clear-digest-schedule]
+olira actions delete-destination <destination_id> [--yes]
+olira actions rotate-destination-secret <destination_id>
+
+# Deliveries
+olira actions list-deliveries [--destination-id ...] [--status ...] [--trigger ...] [--cursor ...] [--limit N]
+olira actions get-delivery <delivery_id>
+olira actions redeliver-delivery <delivery_id>
+```
+
+`create-destination` takes exactly one of `--url` (webhook) or `--to-email` (email), and requires `--triggers` (at least one trigger, or `*` for all). The signing secret is printed once, at creation (and again on rotate) — store it immediately, it cannot be read back. `update-destination` is a flat PATCH: only the flags you pass are sent; `--url` and `--to-email` are mutually exclusive here too; `--clear-digest-schedule` sends an explicit null to turn batching off, distinct from omitting every `--digest-*` flag (which leaves the current setting unchanged). `delete-destination` disables the destination and dead-letters its pending/retrying deliveries — confirms interactively unless `--yes` is passed. `redeliver-delivery` resends the exact original bytes and returns `409` (exit `6`) if the destination is currently disabled.
 
 ### `olira log-types`
 
@@ -547,9 +573,10 @@ Each scope grants access to one set of Olira endpoints.
 | `api:org-config`        | Read and update organisation platform configuration via REST                       |
 | `sdk:state-read`        | Read patient state — stable data, event modules, summaries, logs, events, memories |
 | `sdk:historical-ingest` | Upload and manage bulk historical data ingestion jobs                              |
-| `sdk:integrations`      | Manage EHR integrations — catalog, connect/disconnect, data-point subscriptions, sync status (control-plane only, no write-back) |
-| `sdk:integration-write` | Honor the `write_back` flag on logged events for EHR write-back                   |
+| `sdk:integrations`      | Manage connected integrations — catalog, connect/disconnect, data-point subscriptions, sync status (control-plane only, no write-back) |
+| `sdk:integration-write` | Honor the `write_back` flag on logged events for write-back to a connected system                   |
 | `api:manage-projects`   | Create, list, rename, and deprecate projects; requires an org-wide key            |
+| `sdk:actions`           | Manage outbound-action destinations and their signing secrets; read/redeliver delivery history |
 
 Use `olira keys create --scopes mcp:patient-state sdk:event-log ...` to grant specific
 scopes non-interactively, or omit `--scopes` to use the interactive picker.

@@ -22,7 +22,7 @@ Every script needs [`jq`](https://jqlang.org/) (`brew install jq` /
 |---|---|---|
 | `01_ingest_historical_data.sh` | Validate → upload → (if needed) confirm a small JSONL file end-to-end, using `--watch --timeout` correctly | `sdk:historical-ingest` |
 | `02_query_patient_data.sh` | Look up a patient and read their stable data, views, and recent logs — entirely read-only | `api:manage-patients`, `sdk:state-read` |
-| `03_integration_health.sh` | List connected EHR integrations and flag any data point with a failing sync | `sdk:integrations` |
+| `03_integration_health.sh` | List connected integrations and flag any data point with a failing sync | `sdk:integrations` |
 | `using-olira-with-agents.md` | Guide: setting up Cursor, Claude Code, Codex, or any other coding agent to drive this CLI on your behalf | — |
 
 ## Notes
